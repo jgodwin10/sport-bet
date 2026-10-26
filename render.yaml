@@ -1,4 +1,4 @@
-# Render Blueprint: API web service + PostgreSQL.
+# Render Blueprint: API web service + Key Value (Redis). The database is hosted on Supabase.
 # Render dashboard -> New -> Blueprint -> pick this repo. Values marked `sync: false`
 # are prompted for on first deploy (keys and secrets are never committed).
 services:
@@ -15,12 +15,18 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+      # Supabase -> Connect -> Session pooler URI (IPv4; Render can't reach the IPv6-only direct
+      # host). Not the transaction pooler on :6543: it breaks prepared statements and the
+      # session-level advisory locks the app uses. Append ?sslmode=require.
       - key: DATABASE_URL
-        fromDatabase: { name: footy-db, property: connectionString }
+        sync: false
       - key: ENVIRONMENT
         value: production
       - key: TASK_MODE
-        value: inline  # no Celery worker; admin-triggered jobs run in an API thread
+        value: inline  # no Celery worker; admin-triggered jobs run in an API thread. Set to celery with the worker below.
+      # Shared rate-limit counters now; the Celery broker if the worker below is enabled.
+      - key: REDIS_URL
+        fromService: { type: keyvalue, name: footy-redis, property: connectionString }
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
@@ -40,6 +46,44 @@ services:
       - key: GEMINI_API_KEYS
         sync: false
 
+  - type: keyvalue
+    name: footy-redis
+    plan: free  # 25 MB, not persisted across restarts: fine for rate limits and a task queue
+    maxmemoryPolicy: noeviction  # never silently drop queued Celery tasks
+    ipAllowList: []  # reachable only from services in this Render account
+
+  # Celery worker with the beat scheduler embedded (-B): runs every scheduled refresh in
+  # backend/app/worker/celery_app.py. Background workers have no free plan. To enable,
+  # uncomment and set TASK_MODE=celery on footy-api. It replaces the cron job below.
+  # - type: worker
+  #   name: footy-worker
+  #   runtime: python
+  #   rootDir: backend
+  #   plan: starter
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: celery -A app.worker.celery_app worker -B -l info --concurrency 1 --schedule /tmp/celerybeat-schedule
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: 3.12.8
+  #     - key: ENVIRONMENT
+  #       value: production
+  #     - key: TASK_MODE
+  #       value: celery
+  #     - key: DATABASE_URL
+  #       sync: false
+  #     - key: REDIS_URL
+  #       fromService: { type: keyvalue, name: footy-redis, property: connectionString }
+  #     - key: COMPETITIONS
+  #       value: '["ENG-1","ENG-2","GER-1","ESP-1","ITA-1","FRA-1"]'
+  #     - key: FOOTBALL_DATA_ORG_API_KEY
+  #       sync: false
+  #     - key: THE_ODDS_API_KEY
+  #       sync: false
+  #     - key: API_FOOTBALL_KEY
+  #       sync: false
+  #     - key: GEMINI_API_KEYS
+  #       sync: false
+
   # Scheduled refreshes. Inline mode has no scheduler, so without these the data only
   # updates when an admin presses "Run now". Render cron jobs are billed per run-minute
   # (no free tier); uncomment to enable. They need the same env vars as the API.
@@ -54,15 +98,8 @@ services:
   #     - key: PYTHON_VERSION
   #       value: 3.12.8
   #     - key: DATABASE_URL
-  #       fromDatabase: { name: footy-db, property: connectionString }
+  #       sync: false
   #     - key: GEMINI_API_KEYS
   #       sync: false
   #     - key: THE_ODDS_API_KEY
   #       sync: false
-
-databases:
-  - name: footy-db
-    databaseName: footy
-    user: footy
-    plan: free  # free databases expire after 30 days; use basic-256mb+ to keep data
-    postgresMajorVersion: "16"
