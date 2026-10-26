@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+*.tsbuildinfo
+.vite/
+
+# Environment (Vite loads .env.local / .env.*.local)
+.env
+.env.*
+!.env.example
+
+# Tests
+coverage/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# Deployment
+.vercel/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store

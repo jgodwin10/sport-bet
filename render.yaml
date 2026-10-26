@@ -1,0 +1,68 @@
+# Render Blueprint: API web service + PostgreSQL.
+# Render dashboard -> New -> Blueprint -> pick this repo. Values marked `sync: false`
+# are prompted for on first deploy (keys and secrets are never committed).
+services:
+  - type: web
+    name: footy-api
+    runtime: python
+    rootDir: backend
+    plan: free  # free instances sleep after 15 min idle and have 512 MB RAM; use starter+ for real use
+    buildCommand: pip install -r requirements.txt
+    # Migrations run on every start (pre-deploy commands need a paid plan).
+    # Trust X-Forwarded-For from Render's proxy so rate limiting sees real client IPs.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips '*'
+    healthCheckPath: /api/v1/system/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        fromDatabase: { name: footy-db, property: connectionString }
+      - key: ENVIRONMENT
+        value: production
+      - key: TASK_MODE
+        value: inline  # no Celery worker; admin-triggered jobs run in an API thread
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false  # JSON list, e.g. ["https://your-app.vercel.app"]
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: COMPETITIONS
+        value: '["ENG-1","ENG-2","GER-1","ESP-1","ITA-1","FRA-1"]'
+      - key: FOOTBALL_DATA_ORG_API_KEY
+        sync: false
+      - key: THE_ODDS_API_KEY
+        sync: false
+      - key: API_FOOTBALL_KEY
+        sync: false
+      - key: GEMINI_API_KEYS
+        sync: false
+
+  # Scheduled refreshes. Inline mode has no scheduler, so without these the data only
+  # updates when an admin presses "Run now". Render cron jobs are billed per run-minute
+  # (no free tier); uncomment to enable. They need the same env vars as the API.
+  # - type: cron
+  #   name: footy-update-cycle
+  #   runtime: python
+  #   rootDir: backend
+  #   schedule: "0 * * * *"
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: python -m app.cli update-cycle && python -m app.cli ai-analysis
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: 3.12.8
+  #     - key: DATABASE_URL
+  #       fromDatabase: { name: footy-db, property: connectionString }
+  #     - key: GEMINI_API_KEYS
+  #       sync: false
+  #     - key: THE_ODDS_API_KEY
+  #       sync: false
+
+databases:
+  - name: footy-db
+    databaseName: footy
+    user: footy
+    plan: free  # free databases expire after 30 days; use basic-256mb+ to keep data
+    postgresMajorVersion: "16"
