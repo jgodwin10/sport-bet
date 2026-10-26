@@ -1,0 +1,77 @@
+# Scheduled data refreshes and predictions, run straight against the production database.
+# Replaces Celery beat while the API runs with TASK_MODE=inline (no worker).
+#
+# Repo secrets (Settings -> Secrets and variables -> Actions): DATABASE_URL (Supabase session
+# pooler URI) and, optionally, GEMINI_API_KEYS, THE_ODDS_API_KEY, FOOTBALL_DATA_ORG_API_KEY.
+#
+# Budgets: private repos get 2,000 Actions minutes/month, so the frequent run is every 2 hours
+# (~360 runs). The Odds API free tier is 500 credits/month and one refresh of 6 competitions
+# x 2 markets x 1 region costs 12, so odds refresh once a day.
+name: Scheduled jobs
+
+on:
+  schedule:
+    - cron: "15 */2 * * *"  # fixtures, settlement, predictions, AI analysis
+    - cron: "30 5 * * *"    # daily: history, odds, crests, then predictions again
+  workflow_dispatch:
+    inputs:
+      daily:
+        description: Also run the daily jobs (history, odds, crests)
+        type: boolean
+        default: false
+
+concurrency:
+  group: scheduled-jobs
+  cancel-in-progress: false
+
+env:
+  ENVIRONMENT: production
+  TASK_MODE: inline
+  THE_ODDS_API_REGIONS: uk
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+  THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
+  FOOTBALL_DATA_ORG_API_KEY: ${{ secrets.FOOTBALL_DATA_ORG_API_KEY }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DAILY: ${{ github.event.schedule == '30 5 * * *' || inputs.daily }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+
+      # Daily steps first so the predictions below use the new results and odds.
+      - name: Ingest history
+        if: ${{ !cancelled() && env.DAILY == 'true' }}
+        run: python -m app.cli ingest-history
+      - name: Refresh odds
+        if: ${{ !cancelled() && env.DAILY == 'true' && env.THE_ODDS_API_KEY != '' }}
+        run: python -m app.cli refresh-odds
+      - name: Refresh crests
+        if: ${{ !cancelled() && env.DAILY == 'true' }}
+        run: python -m app.cli ingest-logos
+
+      # Later steps run even if an earlier one failed; the job still reports the failure.
+      - name: Fetch fixtures
+        if: ${{ !cancelled() }}
+        run: python -m app.cli ingest-upcoming
+      - name: Settle results
+        if: ${{ !cancelled() }}
+        run: python -m app.cli settle
+      - name: Update predictions
+        if: ${{ !cancelled() }}
+        run: python -m app.cli predict
+      - name: AI analysis
+        if: ${{ !cancelled() && env.GEMINI_API_KEYS != '' }}
+        run: python -m app.cli ai-analysis
