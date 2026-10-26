@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import httpx
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models import Team, TeamCrest
@@ -45,7 +46,11 @@ def fetch_crest(db: Session, team: Team, size: str, client: httpx.Client | None 
     else:
         cached = TeamCrest(team_id=team.id, size=size, content=resp.content, content_type=ctype, source_url=team.logo_url)
         db.add(cached)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:  # stored concurrently, e.g. by a visitor's request while the logos job warms the cache
+        db.rollback()
+        return db.get(TeamCrest, (team.id, size))
     return cached
 
 

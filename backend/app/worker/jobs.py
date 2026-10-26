@@ -8,13 +8,16 @@ same bucket does not repeat the work.
 from __future__ import annotations
 
 import logging
+import zlib
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.config import get_settings
 from app.db.models import Fixture
-from app.db.session import session_factory
+from app.db.session import get_engine, session_factory
 from app.ingestion.logos import refresh_logos
 from app.ingestion.service import IngestionService, run_job
 from app.providers.registry import get_providers
@@ -31,9 +34,39 @@ def _bucket(minutes: int) -> str:
     return f"{now:%Y%m%d}-{(now.hour * 60 + now.minute) // max(minutes, 1)}"
 
 
+# History, upcoming and odds all write through ingestion.store, which inserts shared rows
+# (seasons, teams, fixtures) inside long per-batch transactions. Two overlapping runs would
+# block on each other's uncommitted inserts until the statement timeout.
+INGEST_LOCK = "ingest"
+SKIPPED = {"skipped": "another ingestion job is running"}
+
+
+@contextmanager
+def exclusive(name: str) -> Iterator[bool]:
+    """Postgres advisory lock shared by the API, the CLI and scheduled runs; yields False
+    instead of waiting when another process holds it. Held on its own connection because
+    an ORM session may switch connections between transactions. No-op on SQLite."""
+    engine = get_engine()
+    if engine.dialect.name != "postgresql":
+        yield True
+        return
+    key = zlib.crc32(name.encode())
+    with engine.connect() as conn:
+        acquired = bool(conn.execute(text("select pg_try_advisory_lock(:k)"), {"k": key}).scalar())
+        conn.commit()
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                conn.execute(text("select pg_advisory_unlock(:k)"), {"k": key})
+                conn.commit()
+
+
 def ingest_history(competitions: list[str] | None = None, seasons: int | None = None, force: bool = False) -> dict:
     s = get_settings()
-    with session_factory()() as db:
+    with exclusive(INGEST_LOCK) as acquired, session_factory()() as db:
+        if not acquired:
+            return SKIPPED
         key = f"history:{','.join(competitions or s.competitions)}:{seasons or s.history_seasons}:" + (
             datetime.now(timezone.utc).isoformat() if force else _bucket(24 * 60))
         job = run_job(db, "history", key, {"competitions": competitions, "seasons": seasons},
@@ -50,7 +83,9 @@ def ingest_logos(force: bool = False) -> dict:
 
 def ingest_upcoming() -> dict:
     s = get_settings()
-    with session_factory()() as db:
+    with exclusive(INGEST_LOCK) as acquired, session_factory()() as db:
+        if not acquired:
+            return SKIPPED
         job = run_job(db, "upcoming", f"upcoming:{_bucket(s.fixtures_refresh_minutes)}", {},
                       lambda: IngestionService(db, get_providers(), s).upcoming())
         return {"job_id": job.id, "status": job.status, "stats": job.stats}
@@ -58,7 +93,9 @@ def ingest_upcoming() -> dict:
 
 def refresh_odds() -> dict:
     s = get_settings()
-    with session_factory()() as db:
+    with exclusive(INGEST_LOCK) as acquired, session_factory()() as db:
+        if not acquired:
+            return SKIPPED
         job = run_job(db, "odds", f"odds:{_bucket(s.odds_refresh_minutes)}", {},
                       lambda: IngestionService(db, get_providers(), s).odds())
         return {"job_id": job.id, "status": job.status, "stats": job.stats}

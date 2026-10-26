@@ -36,3 +36,27 @@ def test_same_name_club_in_another_country_is_rejected():
               "strLeague": "English Premier League", "strCountry": "England"}
     assert best_match([jets], ["Newcastle"], "English Premier League", "England") is None
     assert best_match([jets, united], ["Newcastle", "Newcastle United"], "English Premier League", "England").url == "nufc.png"
+
+
+def test_crest_stored_concurrently_is_reused_not_fatal(db):
+    """A visitor's request can cache the same crest between our lookup and our commit."""
+    import httpx
+
+    from app.db.models import Team, TeamCrest
+    from app.db.session import session_factory
+    from app.services.crests import fetch_crest
+
+    team = Team(name="Synthetic FC", logo_url="https://example.test/badge.png", logo_source="thesportsdb")
+    db.add(team)
+    db.commit()
+
+    class RacingClient:
+        def get(self, url):
+            with session_factory()() as other:
+                other.add(TeamCrest(team_id=team.id, size="tiny", content=b"theirs", content_type="image/png",
+                                    source_url=team.logo_url))
+                other.commit()
+            return httpx.Response(200, headers={"content-type": "image/png"}, content=b"ours")
+
+    crest = fetch_crest(db, team, "tiny", RacingClient())
+    assert crest is not None and crest.content == b"theirs"
