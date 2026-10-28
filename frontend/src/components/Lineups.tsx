@@ -80,7 +80,7 @@ function TeamPanel({ side, team, lineup, aiConfigured }: {
       </div>
 
       {!lineup ? (
-        <div className="mt-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 text-[13px] text-ink-3 leading-relaxed">
+        <div className="mt-3 glass-inset p-4 text-[13px] text-ink-3 leading-relaxed">
           No lineup yet. {aiConfigured
             ? "Predicted XIs come from the AI's web search, usually a day or two before kickoff."
             : "Predicted XIs need the AI analysis, which is not set up on this server."}
@@ -106,12 +106,12 @@ function TeamPanel({ side, team, lineup, aiConfigured }: {
 /** Vertical half-pitch-style view, team attacking upwards; each line is listed right side first. */
 function Pitch({ rows, color }: { rows: Player[][]; color: string }) {
   return (
-    <div className="relative mt-3 overflow-hidden rounded-2xl border border-white/[0.08] bg-[linear-gradient(180deg,rgba(34,197,94,0.14),rgba(34,197,94,0.06))]">
-      <div aria-hidden className="absolute inset-3 rounded-lg border border-white/[0.12]" />
-      <div aria-hidden className="absolute left-3 right-3 top-1/2 border-t border-white/[0.12]" />
-      <div aria-hidden className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.12]" />
-      <div aria-hidden className="absolute bottom-3 left-1/2 h-10 w-36 -translate-x-1/2 border border-b-0 border-white/[0.12]" />
-      <div aria-hidden className="absolute top-3 left-1/2 h-10 w-36 -translate-x-1/2 border border-t-0 border-white/[0.12]" />
+    <div className="relative mt-3 overflow-hidden rounded-xl border border-line bg-[repeating-linear-gradient(180deg,#14301f_0,#14301f_36px,#173823_36px,#173823_72px)]">
+      <div aria-hidden className="absolute inset-3 rounded-lg border border-white/[0.18]" />
+      <div aria-hidden className="absolute left-3 right-3 top-1/2 border-t border-white/[0.18]" />
+      <div aria-hidden className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/[0.18]" />
+      <div aria-hidden className="absolute bottom-3 left-1/2 h-10 w-36 -translate-x-1/2 border border-b-0 border-white/[0.18]" />
+      <div aria-hidden className="absolute top-3 left-1/2 h-10 w-36 -translate-x-1/2 border border-t-0 border-white/[0.18]" />
       <ol className="relative flex flex-col-reverse gap-4 px-2 py-5">
         {rows.map((row, i) => (
           <li key={i} className="flex flex-row-reverse justify-around gap-1">

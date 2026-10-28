@@ -65,32 +65,30 @@ export default function Dashboard() {
         eyebrow={new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
         title="Matches"
         description="Pick a day and a league, then tap a match to see our prediction and the reasons behind it."
-        actions={<button className="btn" onClick={() => setHelp(true)}><Icon name="info" size={15} />How it works</button>}
+        actions={<button className="btn btn-sm sm:h-10 sm:px-4 sm:text-[13.5px]" onClick={() => setHelp(true)}><Icon name="info" size={15} />How it works</button>}
       />
 
-      {/* At-a-glance summary in plain words */}
-      <div className="flex sm:grid sm:grid-cols-3 gap-3 mb-6 -mx-4 px-4 sm:mx-0 sm:px-0 scroll-x no-scrollbar snap-x snap-mandatory animate-fade-up [&>*]:snap-start [&>*]:min-w-[78%] sm:[&>*]:min-w-0">
-        <SummaryTile icon="dashboard" title={`${all.length} upcoming matches`} text="in the next two weeks across tracked leagues" />
-        <SummaryTile icon="sparkle" tone={valueCount ? "pos" : undefined}
-                     title={valueCount ? `${valueCount} value ${valueCount === 1 ? "pick" : "picks"}` : "No value picks right now"}
-                     text={valueCount ? "prices that beat our estimate and pass every check" : "our odds are close to the bookmakers' — that's normal"} />
-        <SummaryTile icon="clock" tone={freshest !== null && freshest > 12 ? "warn" : undefined}
-                     title={freshest === null ? "No odds yet" : `Odds updated ${age(freshest)}`}
-                     text={freshest !== null && freshest > 12 ? "add a live odds key for fresher prices" : "prices refresh automatically"} />
+      {/* At-a-glance summary: one strip, three numbers */}
+      <div className="card grid grid-cols-3 divide-x divide-line mb-5 sm:mb-6 animate-fade-up">
+        <Stat value={String(all.length)} label="Upcoming" detail="matches in the next two weeks" />
+        <Stat value={String(valueCount)} label={valueCount === 1 ? "Value pick" : "Value picks"} tone={valueCount ? "pos" : undefined}
+              detail={valueCount ? "beat our estimate and pass every check" : "our odds are close to the bookmakers'"} />
+        <Stat value={freshest === null ? "—" : age(freshest).replace(" ago", "")} label="Odds age" tone={freshest !== null && freshest > 12 ? "warn" : undefined}
+              detail={freshest !== null && freshest > 12 ? "add a live odds key for fresher prices" : "prices refresh automatically"} />
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_330px] items-start">
-        <div className="min-w-0 space-y-5">
-          {/* Day + league + search */}
-          <div className="space-y-3">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_320px] items-start">
+        <div className="min-w-0 space-y-4">
+          {/* Day + league + search: sticks under the top bar while the list scrolls */}
+          <div className="sticky top-14 lg:top-0 z-20 -mx-4 sm:-mx-6 lg:mx-0 px-4 sm:px-6 lg:px-0 py-3 space-y-2.5 bg-night/95 backdrop-blur-md border-b border-line lg:border-0">
             {days.length > 0 && (
               <Segmented variant="chips" label="Day" value={day ?? ""} onChange={(d) => { setDay(d); setLeague("all"); }} className="fade-edges -mx-4 px-4 sm:mx-0 sm:px-0"
                          options={days.map(([k, n]) => ({ value: k, label: dayChipLabel(k), count: n }))} />
             )}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative sm:w-64 shrink-0">
-                <Icon name="search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4" />
-                <input className="input pl-11" placeholder="Find a team" aria-label="Find a team" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <div className="relative sm:w-60 shrink-0">
+                <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-4" />
+                <input className="input h-10 pl-10" placeholder="Find a team" aria-label="Find a team" value={search} onChange={(e) => setSearch(e.target.value)} />
               </div>
               {leagues.length > 1 && (
                 <Segmented variant="chips" label="League" value={league} onChange={setLeague} className="fade-edges -mx-4 px-4 sm:mx-0 sm:px-0 min-w-0"
@@ -107,37 +105,34 @@ export default function Dashboard() {
                 {all.length ? "Try another day or league." : "New fixtures appear automatically once they are published."}
               </Empty></Card>
             ) : groups.map((list, gi) => (
-              <section key={list[0].competition.code} className="card overflow-hidden animate-fade-up" style={{ animationDelay: `${gi * 40}ms` }}>
-                <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 border-b border-white/[0.06] bg-white/[0.02]">
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    <span className="grid place-items-center h-7 w-7 rounded-lg bg-white/[0.07] text-ink-2"><Icon name="shield" size={14} /></span>
-                    <div className="min-w-0">
-                      <div className="text-[14px] font-bold truncate">{list[0].competition.name}</div>
-                      <div className="text-2xs text-ink-3">{list[0].competition.country}</div>
-                    </div>
+              <section key={list[0].competition.code} className="card bleed overflow-hidden animate-fade-up" style={{ animationDelay: `${gi * 40}ms` }}>
+                <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 border-b border-line bg-night-3/60">
+                  <div className="flex items-baseline gap-2 min-w-0">
+                    <span className="display uppercase text-[17px] tracking-[0.02em] truncate">{list[0].competition.name}</span>
+                    <span className="text-2xs font-semibold text-ink-4 truncate">{list[0].competition.country}</span>
                   </div>
-                  <span className="text-xs text-ink-3 num">{list.length} {list.length === 1 ? "match" : "matches"}</span>
+                  <span className="text-2xs font-semibold text-ink-3 num shrink-0">{list.length} {list.length === 1 ? "match" : "matches"}</span>
                 </header>
                 <div className="divide-soft">{list.map((f) => <MatchRow key={f.id} f={f} />)}</div>
               </section>
             ))}
         </div>
 
-        <aside className="space-y-6 lg:sticky lg:top-24">
+        <aside className="space-y-4 lg:sticky lg:top-8">
           <Card title="Value picks" subtitle="Bets where the price beats our estimate"
                 action={<Link to="/predictions" className="btn btn-ghost btn-sm">See all<Icon name="chevronRight" size={14} /></Link>}>
             {top.isLoading ? <Loading rows={2} /> : top.isError ? <ErrorState error={top.error} /> : !top.data?.items.length ? (
-              <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+              <div className="glass-inset p-4">
                 <div className="flex items-center gap-2 font-semibold text-[14px]"><Icon name="ban" size={16} className="text-ink-3" />Nothing worth betting on</div>
                 <p className="mt-1.5 text-[13px] text-ink-3 leading-relaxed">
                   No price currently beats our estimate by enough while passing every safety check. Holding back is part of the system.
                 </p>
               </div>
             ) : (
-              <ul className="space-y-2.5">
+              <ul className="space-y-2">
                 {top.data.items.map((s) => (
                   <li key={s.selection_id}>
-                    <Link to={`/match/${s.fixture_id}`} className="block rounded-2xl bg-white/[0.04] border border-white/[0.06] p-3.5 hover:bg-white/[0.07] transition-colors">
+                    <Link to={`/match/${s.fixture_id}`} className="block glass-inset p-3.5 hover:border-line-strong transition-colors">
                       <div className="flex items-center gap-2 text-xs text-ink-3">
                         <TeamLogo name={s.home_team?.name ?? ""} src={s.home_team?.logo_url} size={16} />
                         <TeamLogo name={s.away_team?.name ?? ""} src={s.away_team?.logo_url} size={16} />
@@ -145,7 +140,7 @@ export default function Dashboard() {
                       </div>
                       <div className="mt-1.5 flex items-center justify-between gap-2">
                         <span className="text-[14px] font-bold truncate">{selectionLabel(s.market, s.selection, s.home_team?.name, s.away_team?.name)}</span>
-                        <span className="num text-[15px] font-extrabold">{odds(s.odds)}</span>
+                        <span className="display num text-[20px]">{odds(s.odds)}</span>
                       </div>
                       <div className="mt-1 text-xs text-pos num">Value {signedPct(s.expected_value)}</div>
                     </Link>
@@ -189,7 +184,7 @@ export default function Dashboard() {
             ["Prove it on history", "Every model is tested on past seasons it has never seen. The Track record page shows the honest result — including losses."],
           ].map(([t, d], i) => (
             <li key={t} className="flex gap-4">
-              <span className="grid place-items-center h-8 w-8 rounded-full bg-brand-soft text-brand-strong text-sm font-extrabold shrink-0">{i + 1}</span>
+              <span className="grid place-items-center h-8 w-8 rounded-lg bg-brand text-brand-ink display text-[18px] shrink-0">{i + 1}</span>
               <div><div className="font-bold text-[15px]">{t}</div><p className="mt-1 text-[13.5px] text-ink-2 leading-relaxed">{d}</p></div>
             </li>
           ))}
@@ -199,17 +194,12 @@ export default function Dashboard() {
   );
 }
 
-function SummaryTile({ icon, title, text, tone }: { icon: Parameters<typeof Icon>[0]["name"]; title: string; text: string; tone?: "pos" | "warn" }) {
+function Stat({ value, label, detail, tone }: { value: string; label: string; detail: string; tone?: "pos" | "warn" }) {
   return (
-    <div className="card flex items-center gap-3.5 px-4 py-4 min-w-0">
-      <span className={cx("grid place-items-center h-11 w-11 rounded-2xl shrink-0",
-        tone === "pos" ? "bg-pos-soft text-pos" : tone === "warn" ? "bg-warn-soft text-warn" : "bg-white/[0.07] text-ink-2")}>
-        <Icon name={icon} size={19} />
-      </span>
-      <div className="min-w-0">
-        <div className="text-[15px] font-bold leading-tight">{title}</div>
-        <div className="mt-0.5 text-xs text-ink-3 leading-snug">{text}</div>
-      </div>
+    <div className="min-w-0 px-3 py-3 sm:px-5 sm:py-4">
+      <div className={cx("display num text-[28px] sm:text-[36px]", tone === "pos" ? "text-pos" : tone === "warn" ? "text-warn" : "text-ink")}>{value}</div>
+      <div className="mt-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-ink-3 truncate">{label}</div>
+      <div className="hidden sm:block mt-1 text-xs text-ink-4 leading-snug">{detail}</div>
     </div>
   );
 }

@@ -34,19 +34,19 @@ export default function Performance() {
         <Card><Empty title="No track record yet" icon="chart">An administrator needs to run a backtest on historical seasons.</Empty></Card>
       )}
 
-      <div className="space-y-6 mt-6">
+      <div className="space-y-4 sm:space-y-6 mt-4 sm:mt-6">
         {m?.matches ? <Evidence m={m} /> : null}
 
         <Card title="Live record" subtitle="Real predictions made before kickoff, settled after the final whistle">
           {live.selections ? (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
               <StatTile label="Bets" value={live.selections} hint={live.sample_warning ?? undefined} />
               <StatTile label="Return on stake" value={signedPct(live.roi)} tone={live.roi > 0 ? "pos" : "neg"} />
               <StatTile label="Profit" value={`${num(live.profit, 1)} u`} />
               <StatTile label="Beat closing price" value={signedPct(live.clv_mean)} info={GLOSSARY.clv} />
             </div>
           ) : (
-            <div className="flex gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 text-[14px] text-ink-2">
+            <div className="flex gap-3 glass-inset p-4 text-[14px] text-ink-2">
               <Icon name="clock" size={18} className="text-ink-3 shrink-0 mt-0.5" />
               No live bets settled yet. This fills in automatically as recommended bets are made and matches finish.
             </div>
@@ -62,8 +62,8 @@ export default function Performance() {
                   {backtests.data.items.map((b) => (
                     <li key={b.id}>
                       <button onClick={() => setSelected(b.id)}
-                              className={cx("w-full text-left rounded-2xl border px-4 py-3 transition-colors",
-                                b.id === btId ? "bg-white/[0.08] border-white/20" : "bg-white/[0.03] border-white/[0.06] hover:bg-white/[0.06]")}>
+                              className={cx("w-full text-left rounded-xl border px-4 py-3 transition-colors",
+                                b.id === btId ? "bg-night-3 border-brand/50" : "bg-night border-line hover:border-line-strong")}>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-bold text-[13.5px]">#{b.id}</span>
                           <span className="text-[13px] text-ink-2 truncate">{b.params.competitions.join(", ")}</span>
@@ -81,7 +81,7 @@ export default function Performance() {
               {!models.data?.length ? <p className="text-[13px] text-ink-3">None registered.</p> : (
                 <ul className="space-y-2">
                   {models.data.map((v) => (
-                    <li key={v.id} className="rounded-2xl bg-white/[0.03] border border-white/[0.06] px-4 py-3">
+                    <li key={v.id} className="glass-inset px-4 py-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-mono text-xs break-all">{v.version}</span>
                         <Pill tone={v.status === "deployed" ? "brand" : "neutral"}>{v.status}</Pill>
@@ -128,18 +128,18 @@ function Verdict({ m }: { m: any }) {
       text: b.roi_interval_90 ? `Return ${signedPct(b.roi)} on ${b.bets} bets (likely range ${signedPct(b.roi_interval_90[0])} to ${signedPct(b.roi_interval_90[1])})` : "Too few bets to judge", info: GLOSSARY.value },
   ];
   return (
-    <section className="card relative overflow-hidden p-6 sm:p-8 animate-fade-up">
-      <div aria-hidden className={cx("absolute inset-0", edge ? "bg-[radial-gradient(60%_100%_at_0%_0%,rgba(52,211,153,0.18),transparent_60%)]" : "bg-[radial-gradient(60%_100%_at_0%_0%,rgba(251,191,36,0.12),transparent_60%)]")} />
+    <section className="card relative overflow-hidden p-5 sm:p-8 animate-fade-up">
+      <div aria-hidden className={cx("absolute inset-y-0 left-0 w-1", edge ? "bg-pos" : "bg-warn")} />
       <div className="relative">
         <div className="eyebrow">Tested on {m.matches.toLocaleString()} past matches · {fmtDate(m.date_from)} – {fmtDate(m.date_to)}</div>
-        <h2 className="mt-3 text-[22px] sm:text-[28px] font-extrabold tracking-[-0.03em] leading-tight max-w-3xl">{headline}</h2>
+        <h2 className="mt-3 display uppercase text-[28px] sm:text-[40px] leading-[0.98] max-w-3xl">{headline}</h2>
         <p className="mt-2 text-[14.5px] text-ink-2 max-w-3xl leading-relaxed">
           {edge ? "Results still carry risk — past performance does not guarantee future returns."
             : "That's why most matches show “No value bet”. We'd rather tell you that than invent picks."}
         </p>
         <div className="mt-6 grid gap-3 md:grid-cols-3">
           {checks.map((c) => (
-            <div key={c.title} className={cx("flex gap-3 rounded-2xl border p-4", c.ok ? "border-pos/30 bg-pos-soft" : "border-white/[0.07] bg-white/[0.04]")}>
+            <div key={c.title} className={cx("flex gap-3 rounded-xl border p-3.5 sm:p-4", c.ok ? "border-pos/40 bg-pos-soft" : "border-line bg-night")}>
               <span className={cx("grid place-items-center h-9 w-9 rounded-full shrink-0", c.ok ? "bg-pos/25 text-pos" : "bg-white/10 text-ink-2")}>
                 <Icon name={c.ok ? "check" : "x"} size={16} />
               </span>
@@ -165,7 +165,7 @@ function Evidence({ m }: { m: any }) {
   return (
     <>
       <Card title="If you had followed every pick" subtitle={`Flat 1-unit bets under the default rules · ${b.overall?.bets ?? 0} bets`}>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           <StatTile label="Return on stake" value={signedPct(b.overall?.roi)} tone={b.overall?.roi > 0 ? "pos" : "neg"}
                     hint={b.overall?.roi_interval_90 ? `likely ${signedPct(b.overall.roi_interval_90[0])} to ${signedPct(b.overall.roi_interval_90[1])}` : undefined} />
           <StatTile label="Profit" value={`${num(b.overall?.profit, 1)} u`} tone={b.overall?.profit > 0 ? "pos" : "neg"} hint="units staked: 1 per bet" />
@@ -194,11 +194,11 @@ function Evidence({ m }: { m: any }) {
             {ranked.map(([k, v], i) => (
               <li key={k}>
                 <div className="flex items-center justify-between gap-3 text-[13.5px]">
-                  <span className={cx("font-semibold", k === "ensemble" && "text-brand-strong")}>{i + 1}. {NAMES[k] ?? k}</span>
+                  <span className={cx("font-semibold", k === "ensemble" && "text-brand")}>{i + 1}. {NAMES[k] ?? k}</span>
                   <span className="num text-ink-3">{num(v.log_loss, 3)} · {pct(v.accuracy, 0)} right</span>
                 </div>
                 <div className="mt-1.5 h-2 rounded-full bg-white/[0.06] overflow-hidden">
-                  <div className={cx("h-full rounded-full", k === "ensemble" ? "bg-brand" : k === "market" ? "bg-white/50" : "bg-white/20")}
+                  <div className={cx("h-full rounded-full", k === "ensemble" ? "bg-brand" : k === "market" ? "bg-ink-2" : "bg-ink-4")}
                        style={{ width: `${100 - ((v.log_loss - best) / (worst - best || 1)) * 75}%` }} />
                 </div>
               </li>
@@ -266,7 +266,7 @@ function NewBacktest() {
             <Field label="To"><input className="input" type="date" value={form.date_to} onChange={(e) => setForm({ ...form, date_to: e.target.value })} /></Field>
           </div>
           <label className="flex items-start gap-3 text-[13.5px] text-ink-2">
-            <input type="checkbox" className="mt-1 h-4 w-4 accent-[#22c55e]" checked={form.deploy} onChange={(e) => setForm({ ...form, deploy: e.target.checked })} />
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-[#c6f135]" checked={form.deploy} onChange={(e) => setForm({ ...form, deploy: e.target.checked })} />
             Use the result for live predictions
           </label>
         </div>

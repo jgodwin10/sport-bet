@@ -4,10 +4,10 @@ import { age, pct } from "../lib/format";
 import { CONFIDENCE, verdict, type Tone } from "../lib/language";
 import { Icon, type IconName } from "./icons";
 
-/** Chart palette — validated for colour-vision separation and ≥3:1 contrast on the glass surface. */
-export const SERIES = ["#3987e5", "#d95926", "#199e70", "#c98500"] as const;
-export const OUTCOME_COLORS = { home: "#3987e5", draw: "#8592a8", away: "#d95926" } as const;
-export const AXIS = { stroke: "#56627a", grid: "rgba(255,255,255,0.06)", fontSize: 11 } as const;
+/** Chart palette — validated for colour-vision separation and ≥3:1 contrast on the card surface. */
+export const SERIES = ["#3d8bfd", "#f0763a", "#3ddc97", "#c6f135"] as const;
+export const OUTCOME_COLORS = { home: "#3d8bfd", draw: "#8b95a5", away: "#f0763a" } as const;
+export const AXIS = { stroke: "#5a6370", grid: "rgba(255,255,255,0.06)", fontSize: 11 } as const;
 
 export function cx(...parts: (string | number | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -18,13 +18,13 @@ export function PageHeader({ title, description, actions, eyebrow }: {
   title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode;
 }) {
   return (
-    <header className="mb-6 sm:mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+    <header className="mb-5 sm:mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
       <div className="min-w-0">
-        {eyebrow && <div className="eyebrow mb-2 text-brand-strong">{eyebrow}</div>}
+        {eyebrow && <div className="eyebrow mb-2 !text-brand">{eyebrow}</div>}
         <h1 className="h-page">{title}</h1>
-        {description && <p className="mt-2 text-[14.5px] text-ink-2 max-w-2xl leading-relaxed">{description}</p>}
+        {description && <p className="mt-2.5 text-[14px] sm:text-[15px] text-ink-3 max-w-2xl leading-relaxed">{description}</p>}
       </div>
-      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      {actions && <div className="flex flex-wrap items-center gap-2 shrink-0">{actions}</div>}
     </header>
   );
 }
@@ -36,19 +36,19 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
   return (
     <section className={cx("card min-w-0", className)}>
       {(title || action) && (
-        <header className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 sm:pt-6">
+        <header className="flex items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
           <div className="min-w-0">
             {title && (
               <h2 className="h-section flex items-center gap-1.5">
                 {title}{info && <InfoTip text={info} />}
               </h2>
             )}
-            {subtitle && <p className="mt-1 text-[13px] text-ink-3 leading-snug">{subtitle}</p>}
+            {subtitle && <p className="mt-0.5 text-[12.5px] text-ink-3 leading-snug">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
         </header>
       )}
-      <div className={cx(flush ? "pt-4" : "p-5 sm:p-6", title && !flush && "pt-4 sm:pt-5", bodyClassName)}>{children}</div>
+      <div className={cx(flush ? "pt-3" : "p-4 sm:p-5", title && !flush && "pt-3 sm:pt-4", bodyClassName)}>{children}</div>
     </section>
   );
 }
@@ -56,14 +56,14 @@ export function Card({ title, subtitle, action, children, className, bodyClassNa
 export function StatTile({ label, value, hint, tone, icon, info }: {
   label: string; value: ReactNode; hint?: ReactNode; tone?: Tone; icon?: IconName; info?: string;
 }) {
-  const color = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : tone === "warn" ? "text-warn" : tone === "brand" ? "text-brand-strong" : "text-ink";
+  const color = tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : tone === "warn" ? "text-warn" : tone === "brand" ? "text-brand" : "text-ink";
   return (
-    <div className="card px-4 py-4 sm:px-5 min-w-0">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-ink-3">
-        {icon && <Icon name={icon} size={14} />}<span className="truncate">{label}</span>{info && <InfoTip text={info} />}
+    <div className="card px-4 py-3.5 sm:px-5 sm:py-4 min-w-0">
+      <div className="flex items-center gap-1.5 text-2xs font-bold uppercase tracking-[0.08em] text-ink-3">
+        {icon && <Icon name={icon} size={13} />}<span className="truncate">{label}</span>{info && <InfoTip text={info} />}
       </div>
-      <div className={cx("mt-2 text-[22px] sm:text-[28px] leading-none font-extrabold num tracking-[-0.03em]", color)}>{value}</div>
-      {hint && <div className="mt-2 text-xs text-ink-3 leading-snug">{hint}</div>}
+      <div className={cx("mt-2 display num text-[28px] sm:text-[34px]", color)}>{value}</div>
+      {hint && <div className="mt-1.5 text-xs text-ink-3 leading-snug">{hint}</div>}
     </div>
   );
 }
@@ -91,7 +91,7 @@ export function Loading({ label = "Loading", rows = 4 }: { label?: string; rows?
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   const msg = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "Unknown error";
   return (
-    <div role="alert" className="flex gap-3 rounded-2xl border border-neg/25 bg-neg-soft px-4 py-4">
+    <div role="alert" className="flex gap-3 rounded-xl border border-neg/30 bg-neg-soft px-4 py-4">
       <Icon name="alert" size={18} className="text-neg shrink-0 mt-0.5" />
       <div className="min-w-0 flex-1">
         <p className="text-[14px] font-semibold text-ink">Something went wrong loading this</p>
@@ -104,8 +104,8 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 
 export function Empty({ title, children, icon = "info", action }: { title: string; children?: ReactNode; icon?: IconName; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center text-center py-12 px-6">
-      <div className="grid place-items-center h-14 w-14 rounded-2xl bg-white/[0.06] border border-white/[0.08] text-ink-2 mb-4">
+    <div className="flex flex-col items-center text-center py-10 sm:py-12 px-6">
+      <div className="grid place-items-center h-12 w-12 rounded-xl bg-night-3 border border-line-strong text-ink-3 mb-4">
         <Icon name={icon} size={24} />
       </div>
       <p className="text-[16px] font-bold text-ink">{title}</p>
@@ -117,11 +117,11 @@ export function Empty({ title, children, icon = "info", action }: { title: strin
 
 /* ------------------------------------------------------------------ pills */
 const TONES: Record<Tone, string> = {
-  neutral: "bg-white/[0.07] text-ink-2 ring-1 ring-inset ring-white/[0.1]",
-  pos: "bg-pos-soft text-pos ring-1 ring-inset ring-pos/25",
-  neg: "bg-neg-soft text-neg ring-1 ring-inset ring-neg/25",
-  warn: "bg-warn-soft text-warn ring-1 ring-inset ring-warn/25",
-  brand: "bg-brand-soft text-brand-strong ring-1 ring-inset ring-brand/30",
+  neutral: "bg-white/[0.06] text-ink-2",
+  pos: "bg-pos-soft text-pos",
+  neg: "bg-neg-soft text-neg",
+  warn: "bg-warn-soft text-warn",
+  brand: "bg-brand-soft text-brand",
 };
 
 export function Pill({ tone = "neutral", icon, children, className, title }: { tone?: Tone; icon?: IconName; children: ReactNode; className?: string; title?: string }) {
@@ -147,7 +147,7 @@ export function ReliabilityBadge({ score, label, compact = false }: { score: num
     <span className="inline-flex items-center gap-1.5 text-xs text-ink-2" title={`Data confidence ${Math.round(score)}/100 (${label})`}>
       <span className="flex items-end gap-[2px]" aria-hidden>
         {[0, 1, 2, 3].map((i) => (
-          <span key={i} className={cx("w-[3px] rounded-full", i < filled ? color : "bg-white/15")} style={{ height: 5 + i * 2.5 }} />
+          <span key={i} className={cx("w-[3px] rounded-[1px]", i < filled ? color : "bg-white/15")} style={{ height: 5 + i * 2.5 }} />
         ))}
       </span>
       {!compact && <span className="font-semibold">{c.label}</span>}
@@ -179,7 +179,7 @@ export function TeamLogo({ name, src, size = 32, className }: { name: string; sr
   return (
     <span className={cx("relative grid place-items-center shrink-0", className)} style={{ width: size, height: size }} aria-hidden>
       {/* Initials badge doubles as the loading placeholder, so a crest never leaves an empty gap. */}
-      <span className={cx("absolute inset-0 grid place-items-center rounded-full bg-gradient-to-br from-white/[0.14] to-white/[0.04] ring-1 ring-white/[0.12] text-ink-2 font-bold transition-opacity duration-300",
+      <span className={cx("absolute inset-0 grid place-items-center rounded-full bg-night-3 ring-1 ring-line-strong text-ink-3 font-bold transition-opacity duration-300",
                           showImg && loaded ? "opacity-0" : "opacity-100")}
             style={{ fontSize: Math.max(9, size * 0.34) }}>
         {initials || "?"}
@@ -187,7 +187,7 @@ export function TeamLogo({ name, src, size = 32, className }: { name: string; sr
       {showImg && (
         <img src={url!} alt="" width={size} height={size} loading="lazy" decoding="async"
              onLoad={() => setLoaded(true)} onError={() => setFailed(true)}
-             className={cx("relative object-contain drop-shadow-[0_2px_6px_rgba(0,0,0,0.45)] transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
+             className={cx("relative object-contain drop-shadow-[0_1px_3px_rgba(0,0,0,0.5)] transition-opacity duration-300", loaded ? "opacity-100" : "opacity-0")}
              style={{ width: size, height: size }} />
       )}
     </span>
@@ -230,13 +230,28 @@ export function ProbChips({ p }: { p: { home?: number; draw?: number; away?: num
   const items = [["1", p.home ?? 0], ["X", p.draw ?? 0], ["2", p.away ?? 0]] as const;
   const max = Math.max(...items.map(([, v]) => v));
   return (
-    <div className="grid grid-cols-3 gap-1.5" role="img" aria-label={items.map(([k, v]) => `${k} ${pct(v, 0)}`).join(", ")}>
+    <div className="grid grid-cols-3 gap-1" role="img" aria-label={items.map(([k, v]) => `${k} ${pct(v, 0)}`).join(", ")}>
       {items.map(([k, v]) => (
-        <span key={k} className={cx("flex flex-col items-center justify-center rounded-xl py-1.5 min-w-[46px]",
-                                    v === max ? "bg-white text-night" : "bg-white/[0.06] text-ink-2")}>
-          <span className={cx("text-[10px] font-bold leading-none", v === max ? "text-night/60" : "text-ink-4")}>{k}</span>
-          <span className="mt-1 text-[13px] font-extrabold num leading-none">{pct(v, 0)}</span>
+        <span key={k} className={cx("flex flex-col items-center justify-center rounded-lg h-[42px] min-w-[40px] border",
+                                    v === max ? "bg-brand-soft border-brand/40 text-brand" : "bg-night border-line text-ink-2")}>
+          <span className={cx("text-[10px] font-bold leading-none", v === max ? "text-brand/70" : "text-ink-4")}>{k}</span>
+          <span className="mt-1 display text-[17px] num">{pct(v, 0)}</span>
         </span>
+      ))}
+    </div>
+  );
+}
+
+/** Up to four numbers in one divided strip; compact enough for a phone card. */
+export function MetricStrip({ items, className }: { items: [string, string, ("pos" | "neg" | undefined)?, string?][]; className?: string }) {
+  return (
+    <div className={cx("mt-3 grid divide-x divide-line rounded-xl border border-line bg-night", className)}
+         style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
+      {items.map(([label, value, tone, info]) => (
+        <div key={label} className="min-w-0 px-2 py-2 text-center">
+          <div className="flex items-center justify-center gap-0.5 text-[10px] font-bold uppercase tracking-[0.06em] text-ink-4 truncate">{label}{info && <InfoTip text={info} />}</div>
+          <div className={cx("mt-0.5 display num text-[19px]", tone === "pos" ? "text-pos" : tone === "neg" ? "text-neg" : "text-ink")}>{value}</div>
+        </div>
       ))}
     </div>
   );
@@ -247,8 +262,8 @@ export function FormPills({ seq, max = 5, size = 20 }: { seq: string; max?: numb
     <span className="inline-flex gap-1" aria-label={`Last results: ${seq.slice(0, max)}`}>
       {seq.split("").slice(0, max).map((r, i) => (
         <span key={i} style={{ width: size, height: size }}
-              className={cx("grid place-items-center rounded-md text-[10px] font-extrabold",
-                r === "W" ? "bg-pos/20 text-pos" : r === "L" ? "bg-neg/20 text-neg" : "bg-white/10 text-ink-2")}>{r}</span>
+              className={cx("grid place-items-center rounded text-[10px] font-extrabold",
+                r === "W" ? "bg-pos text-night" : r === "L" ? "bg-neg text-night" : "bg-white/15 text-ink-2")}>{r}</span>
       ))}
     </span>
   );
@@ -274,14 +289,28 @@ export function ChartTooltip({ active, payload, label, fmt }: { active?: boolean
 /** Tabs / segmented control. Scrolls horizontally on small screens. */
 export function Segmented<T extends string>({ value, options, onChange, label, className, variant = "pill", fill = false }: {
   value: T; options: { value: T; label: ReactNode; count?: number }[]; onChange: (v: T) => void; label: string;
-  className?: string; variant?: "pill" | "chips"; fill?: boolean;
+  className?: string; variant?: "pill" | "chips" | "tabs"; fill?: boolean;
 }) {
+  if (variant === "tabs") {
+    return (
+      <div role="tablist" aria-label={label} className={cx("flex gap-1 border-b border-line scroll-x no-scrollbar", className)}>
+        {options.map((o) => (
+          <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
+                  className={cx("relative h-11 shrink-0 px-3 sm:px-4 text-[14px] font-semibold whitespace-nowrap transition-colors",
+                                value === o.value ? "text-ink" : "text-ink-3 hover:text-ink-2")}>
+            {o.label}
+            {value === o.value && <span aria-hidden className="absolute inset-x-2 -bottom-px h-[3px] rounded-t bg-brand" />}
+          </button>
+        ))}
+      </div>
+    );
+  }
   if (variant === "chips") {
     return (
       <div role="tablist" aria-label={label} className={cx("flex gap-2 scroll-x no-scrollbar", className)}>
         {options.map((o) => (
           <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)} className="chip-btn">
-            {o.label}{o.count !== undefined && <span className={cx("num text-[11px]", value === o.value ? "text-night/60" : "text-ink-4")}>{o.count}</span>}
+            {o.label}{o.count !== undefined && <span className={cx("num text-[11px]", value === o.value ? "text-brand-ink/60" : "text-ink-4")}>{o.count}</span>}
           </button>
         ))}
       </div>
@@ -289,12 +318,12 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
   }
   return (
     <div role="tablist" aria-label={label}
-         className={cx("glass max-w-full rounded-full p-1 gap-1", fill ? "grid w-full sm:w-auto sm:inline-flex" : "inline-flex scroll-x no-scrollbar", className)}
+         className={cx("max-w-full rounded-xl border border-line bg-night-2 p-1 gap-1", fill ? "grid w-full sm:w-auto sm:inline-flex" : "inline-flex scroll-x no-scrollbar", className)}
          style={fill ? { gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` } : undefined}>
       {options.map((o) => (
         <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                className={cx("h-9 shrink-0 rounded-full text-[13.5px] font-semibold transition-all whitespace-nowrap", fill ? "px-2 sm:px-4 text-[13px] sm:text-[13.5px]" : "px-4",
-                              value === o.value ? "bg-white text-night shadow-sm" : "text-ink-2 hover:text-ink hover:bg-white/[0.06]")}>
+                className={cx("h-8 shrink-0 rounded-lg text-[13px] font-semibold transition-all whitespace-nowrap", fill ? "px-2 sm:px-4" : "px-3.5",
+                              value === o.value ? "bg-night-3 text-ink ring-1 ring-line-strong" : "text-ink-3 hover:text-ink")}>
           {o.label}
         </button>
       ))}
@@ -350,7 +379,7 @@ export function InfoTip({ text }: { text: string }) {
       </button>
       {open && (
         <span id={id} role="tooltip"
-              className="glass-strong absolute left-1/2 top-full z-40 mt-2 w-64 -translate-x-1/2 rounded-2xl p-3 text-xs font-normal normal-case tracking-normal text-ink-2 leading-relaxed animate-fade-in">
+              className="glass-strong absolute left-1/2 top-full z-40 mt-2 w-64 max-w-[80vw] -translate-x-1/2 rounded-xl p-3 text-xs font-normal normal-case tracking-normal text-ink-2 leading-relaxed animate-fade-in">
           {text}
         </span>
       )}
@@ -373,15 +402,15 @@ export function Sheet({ open, onClose, title, children, footer }: {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
-      <button className="absolute inset-0 bg-black/55 backdrop-blur-sm animate-fade-in" aria-label="Close" onClick={onClose} />
-      <div className="glass-strong relative w-full sm:max-w-lg max-h-[88dvh] flex flex-col rounded-t-[28px] sm:rounded-[28px] animate-sheet-in sm:animate-fade-up">
-        <div className="sm:hidden mx-auto mt-2.5 h-1.5 w-11 rounded-full bg-white/20" aria-hidden />
+      <button className="absolute inset-0 bg-black/65 animate-fade-in" aria-label="Close" onClick={onClose} />
+      <div className="glass-strong relative w-full sm:max-w-lg max-h-[88dvh] flex flex-col rounded-t-2xl sm:rounded-2xl animate-sheet-in sm:animate-fade-up">
+        <div className="sm:hidden mx-auto mt-2.5 h-1 w-10 rounded-full bg-white/20" aria-hidden />
         <div className="flex items-center justify-between px-6 pt-4 pb-3">
-          <h2 className="text-[17px] font-bold">{title}</h2>
+          <h2 className="display uppercase text-[24px]">{title}</h2>
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
         </div>
         <div className="px-6 pb-5 overflow-y-auto">{children}</div>
-        {footer && <div className="px-6 py-4 border-t border-white/[0.07] safe-bottom">{footer}</div>}
+        {footer && <div className="px-6 py-4 border-t border-line safe-bottom">{footer}</div>}
       </div>
     </div>
   );
@@ -404,11 +433,11 @@ export function Disclosure({ title, children, defaultOpen = false }: { title: Re
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="card overflow-hidden">
-      <button className="w-full flex items-center justify-between gap-3 px-5 sm:px-6 py-4 text-left" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left hover:bg-white/[0.02] transition-colors" aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="h-section">{title}</span>
         <Icon name="chevronDown" size={18} className={cx("text-ink-3 transition-transform", open && "rotate-180")} />
       </button>
-      {open && <div className="px-5 sm:px-6 pb-6 animate-fade-in">{children}</div>}
+      {open && <div className="px-4 sm:px-5 pb-5 animate-fade-in">{children}</div>}
     </div>
   );
 }

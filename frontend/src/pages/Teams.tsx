@@ -32,8 +32,8 @@ function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
       <PageHeader title="Teams" description="Form, ratings and results for every club we track. Tap a crest to open the team." />
       <div className="space-y-3 mb-6">
         <div className="relative sm:w-80">
-          <Icon name="search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4" />
-          <input className="input pl-11" placeholder="Search all teams" aria-label="Search all teams" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-4" />
+          <input className="input pl-10" placeholder="Search all teams" aria-label="Search all teams" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         {!search && (
           <Segmented variant="chips" label="League" value={league} onChange={setLeague} className="fade-edges -mx-4 px-4 sm:mx-0 sm:px-0"
@@ -43,13 +43,13 @@ function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
       {teams.isLoading ? <Card><Loading rows={4} /></Card> : teams.isError ? <ErrorState error={teams.error} onRetry={teams.refetch} /> : !teams.data?.length ? (
         <Card><Empty title="No teams found" icon="shield">Try a different search or league.</Empty></Card>
       ) : (
-        <ul className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+        <ul className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
           {teams.data.map((t, i) => (
             <li key={t.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}>
               <button onClick={() => onSelect(t.id)}
-                      className="card w-full flex flex-col items-center gap-3 px-3 py-5 text-center transition-all hover:-translate-y-0.5 hover:bg-white/[0.08]">
-                <TeamLogo name={t.name} src={t.logo_url} size={56} />
-                <span className="text-[14px] font-bold leading-tight line-clamp-2">{t.name}</span>
+                      className="card w-full h-full flex flex-col items-center gap-2.5 px-2 py-4 text-center transition-colors hover:border-line-strong hover:bg-night-3">
+                <TeamLogo name={t.name} src={t.logo_url} size={44} className="sm:!w-14 sm:!h-14" />
+                <span className="text-[12.5px] sm:text-[13.5px] font-semibold leading-tight line-clamp-2">{t.name}</span>
               </button>
             </li>
           ))}
@@ -76,10 +76,10 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
         <Icon name="chevronLeft" size={16} />All teams
       </button>
 
-      <section className="card relative overflow-hidden p-6 sm:p-8 mb-6">
-        <div aria-hidden className="absolute inset-0 bg-[radial-gradient(50%_90%_at_0%_0%,rgba(34,197,94,0.16),transparent_60%)]" />
+      <section className="card relative overflow-hidden p-5 sm:p-8 mb-4 sm:mb-6">
+        <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-brand" />
         <div className="relative flex flex-col sm:flex-row items-center sm:items-center gap-5 text-center sm:text-left">
-          <TeamLogo name={d.team.name} src={d.team.logo_url} size={96} />
+          <TeamLogo name={d.team.name} src={d.team.logo_url} size={80} className="sm:!w-24 sm:!h-24" />
           <div className="min-w-0">
             <h1 className="h-page">{d.team.name}</h1>
             <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-3">
@@ -90,7 +90,7 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
         </div>
       </section>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4 sm:mb-6">
         <StatTile label="Points per game" value={num(l10?.points_per_game)} hint={l10 ? `${l10.wins} won · ${l10.draws} drawn · ${l10.losses} lost` : undefined} />
         <StatTile label="Goals (last 10)" value={l10 ? `${l10.goals_for}–${l10.goals_against}` : "—"} hint={`${l10?.clean_sheets ?? 0} clean sheets`} />
         <StatTile label="Home / away PPG" value={`${num(d.form.home?.points_per_game, 1)} / ${num(d.form.away?.points_per_game, 1)}`} hint="last 10 at each venue" />
@@ -98,7 +98,7 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
                   hint={elo && eloPrev ? `${elo >= eloPrev ? "▲" : "▼"} ${num(Math.abs(elo - eloPrev), 0)} over 10 matches` : "Elo rating"} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 mb-6">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 mb-4 sm:mb-6">
         <Card title={hasXg ? "Chances created vs allowed (xG)" : "Goals scored vs conceded"} subtitle={`Last ${trend.length} matches`}>
           <div className="flex gap-4 text-xs text-ink-2 mb-3">
             <span className="flex items-center gap-1.5"><span className="h-1 w-4 rounded-full" style={{ background: SERIES[0] }} />{hasXg ? "Created" : "Scored"}</span>
@@ -132,7 +132,7 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] items-start">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] items-start">
         <Card title="Results" subtitle="Most recent first" flush>
           <ul className="divide-soft max-h-[520px] overflow-y-auto">
             {d.matches.map((m: any) => (
@@ -154,7 +154,7 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
               <ul className="space-y-2">
                 {d.upcoming.map((u: any) => (
                   <li key={u.fixture_id}>
-                    <Link to={`/match/${u.fixture_id}`} className="flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-3.5 py-3 hover:bg-white/[0.08] transition-colors">
+                    <Link to={`/match/${u.fixture_id}`} className="flex items-center gap-3 glass-inset px-3.5 py-3 hover:bg-white/[0.08] transition-colors">
                       <span className="flex -space-x-1.5 shrink-0"><TeamLogo name={u.home_team} src={u.home_logo} size={24} /><TeamLogo name={u.away_team} src={u.away_logo} size={24} /></span>
                       <span className="min-w-0 flex-1">
                         <span className="block text-[13.5px] font-semibold truncate">{u.home_team} v {u.away_team}</span>

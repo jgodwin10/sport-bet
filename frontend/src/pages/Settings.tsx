@@ -31,7 +31,7 @@ function Section({ icon, title, description, children }: { icon: IconName; title
   return (
     <Card>
       <div className="flex items-start gap-3.5 mb-5">
-        <span className="grid place-items-center h-10 w-10 rounded-2xl bg-white/[0.07] text-ink-2 shrink-0"><Icon name={icon} size={18} /></span>
+        <span className="grid place-items-center h-10 w-10 rounded-xl bg-night-3 border border-line text-brand shrink-0"><Icon name={icon} size={18} /></span>
         <div><h2 className="h-section">{title}</h2><p className="mt-0.5 text-[13.5px] text-ink-3 leading-relaxed">{description}</p></div>
       </div>
       {children}
@@ -45,7 +45,7 @@ function Toggle({ checked, onChange, disabled, label, hint }: { checked: boolean
       <span><span className="block text-[14px] font-semibold">{label}</span>{hint && <span className="block text-xs text-ink-3 mt-0.5">{hint}</span>}</span>
       <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
               className={cx("relative h-7 w-12 shrink-0 rounded-full transition-colors", checked ? "bg-brand" : "bg-white/15")}>
-        <span className={cx("absolute left-0 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform", checked ? "translate-x-[22px]" : "translate-x-0.5")} />
+        <span className={cx("absolute left-0 top-0.5 h-6 w-6 rounded-full shadow transition-transform", checked ? "translate-x-[22px] bg-brand-ink" : "translate-x-0.5 bg-white")} />
       </button>
     </div>
   );
@@ -90,12 +90,12 @@ export default function Settings() {
     <>
       <PageHeader title="Settings" description="Control when a bet counts as a recommendation. API keys stay on the server and are never shown here." />
       {!isAdmin && (
-        <div className="glass mb-6 flex gap-3 rounded-2xl p-4 text-[14px] text-ink-2">
+        <div className="glass mb-5 flex gap-3 rounded-xl p-4 text-[14px] text-ink-2">
           <Icon name="info" size={18} className="text-ink-3 mt-0.5 shrink-0" />You're viewing settings read-only. Sign in as an administrator to change them.
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2 items-start">
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 items-start">
         <Section icon="target" title="When to recommend a bet" description="Every rule must pass. Stricter rules mean fewer, safer picks.">
           <div className="grid gap-4 sm:grid-cols-2">
             {RULE_FIELDS.map((f) => (
@@ -108,7 +108,7 @@ export default function Settings() {
               </Field>
             ))}
           </div>
-          <div className="mt-3 border-t border-white/[0.06]">
+          <div className="mt-3 border-t border-line">
             <Toggle label="Extra safety margin" hint="Only recommend when the value survives the model's uncertainty range" checked={rules.require_lower_bound_ev_positive}
                     disabled={!isAdmin} onChange={(v) => setRules({ ...rules, require_lower_bound_ev_positive: v })} />
           </div>
@@ -155,7 +155,7 @@ export default function Settings() {
         <Section icon="database" title="Data sources" description={`Fixtures refresh every ${server.update_intervals_minutes.fixtures} min, odds every ${server.update_intervals_minutes.odds} min, lineups every ${server.update_intervals_minutes.lineups} min.`}>
           <ul className="space-y-2.5">
             {server.providers.map((p: any) => (
-              <li key={p.name} className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-4 py-3">
+              <li key={p.name} className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
                 <span className="flex items-center gap-3 min-w-0">
                   <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", p.configured ? "bg-pos" : "bg-white/20")} />
                   <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">{providerName(p.name)}</span>
@@ -165,7 +165,7 @@ export default function Settings() {
               </li>
             ))}
             {server.ai && (
-              <li className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-4 py-3">
+              <li className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
                 <span className="flex items-center gap-3 min-w-0">
                   <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", server.ai.configured ? "bg-pos" : "bg-white/20")} />
                   <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">Gemini AI analysis</span>
@@ -198,7 +198,7 @@ export default function Settings() {
                 ["Unresolved data conflicts", dq.data!.unresolved_conflicts.length, "Sources that disagree about a team, kickoff or score"],
                 ["Finished matches without a result", dq.data!.fixtures_missing_results.length, "Results arrive with the next data refresh"],
               ].map(([label, n, hint]) => (
-                <div key={String(label)} className="flex items-center justify-between gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] px-4 py-3">
+                <div key={String(label)} className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
                   <span><span className="block text-[14px] font-semibold">{label}</span><span className="block text-xs text-ink-3">{hint}</span></span>
                   <Pill tone={Number(n) ? "warn" : "pos"}>{Number(n) ? n : "All clear"}</Pill>
                 </div>
@@ -210,8 +210,8 @@ export default function Settings() {
       </div>
 
       {isAdmin && (dirty || error || action.isSuccess || action.isError) && (
-        <div className="sticky bottom-28 lg:bottom-6 z-20 mt-6 flex justify-center">
-          <div className="glass-strong flex flex-wrap items-center gap-3 rounded-full pl-5 pr-2 py-2 max-w-full">
+        <div className="sticky bottom-24 lg:bottom-6 z-20 mt-6 flex justify-center">
+          <div className="glass-strong flex flex-wrap items-center gap-3 rounded-xl pl-4 pr-2 py-2 max-w-full">
             <span className={cx("text-[13.5px] font-semibold", error || action.isError ? "text-neg" : action.isSuccess && !dirty ? "text-pos" : "text-ink-2")}>
               {error ?? (action.isError ? (action.error as Error).message : action.isSuccess && !dirty ? "Saved" : "Unsaved changes")}
             </span>

@@ -36,11 +36,11 @@ export default function Login() {
     <div className="min-h-[62dvh] grid place-items-center animate-fade-up">
       <div className="w-full max-w-sm">
         <div className="text-center mb-7">
-          <span className="inline-grid place-items-center h-14 w-14 rounded-2xl bg-brand-soft text-brand-strong ring-1 ring-brand/30 mb-4"><Icon name="user" size={24} /></span>
-          <h1 className="text-[26px] font-extrabold tracking-[-0.03em]">Welcome back</h1>
+          <span className="inline-grid place-items-center h-14 w-14 rounded-xl bg-brand text-brand-ink mb-4"><Icon name="user" size={24} /></span>
+          <h1 className="h-page">Welcome back</h1>
           <p className="mt-1.5 text-[14px] text-ink-3">Anyone can browse predictions. Sign in to manage settings and track stakes.</p>
         </div>
-        <form onSubmit={submit} className="card p-6 space-y-4" noValidate>
+        <form onSubmit={submit} className="card p-5 sm:p-6 space-y-4" noValidate>
           <Field label="Email"><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
           <Field label="Password"><input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
           {error && (

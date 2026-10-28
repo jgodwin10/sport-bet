@@ -4,7 +4,7 @@ import { usePredictions, type PredictionFilters } from "../api/hooks";
 import type { SelectionRow } from "../api/types";
 import { Icon } from "../components/icons";
 import {
-  Card, cx, Empty, ErrorState, Freshness, InfoTip, Loading, PageHeader, Pager, Pill, ReliabilityBadge, Segmented, TeamLogo,
+  Card, cx, Empty, ErrorState, Freshness, Loading, MetricStrip, PageHeader, Pager, Pill, ReliabilityBadge, Segmented, TeamLogo,
 } from "../components/ui";
 import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { friendlyReason, GLOSSARY, selectionLabel } from "../lib/language";
@@ -50,13 +50,13 @@ export default function Predictions() {
                      options={[{ value: "upcoming", label: "Upcoming" }, { value: "settled", label: "Results" }]} />
           {status === "upcoming" && (
             <button role="switch" aria-checked={showAll} onClick={() => reset(() => setShowAll(!showAll))}
-                    className={cx("btn", showAll && "bg-white text-night hover:bg-white")}>
+                    className={cx("btn h-10", showAll && "border-brand/60 text-brand")}>
               <Icon name={showAll ? "check" : "filter"} size={15} />{showAll ? "Showing every bet checked" : "Show every bet checked"}
             </button>
           )}
           <div className="relative w-full sm:w-64 sm:ml-auto">
-            <Icon name="search" size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-4" />
-            <input className="input pl-11" placeholder="Find a team" aria-label="Find a team" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} />
+            <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-4" />
+            <input className="input h-10 pl-10" placeholder="Find a team" aria-label="Find a team" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} />
           </div>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
@@ -64,7 +64,7 @@ export default function Predictions() {
                      options={MARKETS.map((m) => ({ value: m.value, label: m.label }))} />
           <label className="flex items-center gap-2 text-[13px] text-ink-3 shrink-0">
             Sort by
-            <select className="input h-9 w-auto rounded-full text-[13px] font-semibold" value={sort} onChange={(e) => reset(() => setSort(e.target.value))}>
+            <select className="input h-9 w-auto text-[13px] font-semibold" value={sort} onChange={(e) => reset(() => setSort(e.target.value))}>
               {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </label>
@@ -88,7 +88,7 @@ export default function Predictions() {
           </Card>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {q.data.items.map((r, i) => <PickCard key={r.selection_id} r={r} delay={i} />)}
             </div>
             <Pager page={q.data.page} pageSize={q.data.page_size} total={q.data.total} onPage={setPage} />
@@ -103,57 +103,45 @@ function PickCard({ r, delay }: { r: SelectionRow; delay: number }) {
   const settled = r.status === "settled";
   return (
     <Link to={`/match/${r.fixture_id}`} style={{ animationDelay: `${Math.min(delay, 12) * 30}ms` }}
-          className={cx("card group flex flex-col p-5 transition-all hover:-translate-y-0.5 hover:bg-white/[0.08] animate-fade-up",
-                        r.qualifies && !settled && "ring-1 ring-pos/35")}>
-      <div className="flex items-center gap-2 text-xs text-ink-3 min-w-0">
-        <span className="flex -space-x-1.5 shrink-0">
-          <TeamLogo name={home ?? ""} src={r.home_team?.logo_url} size={22} />
-          <TeamLogo name={away ?? ""} src={r.away_team?.logo_url} size={22} />
+          className={cx("card group flex flex-col p-3.5 sm:p-4 transition-colors hover:border-line-strong animate-fade-up",
+                        r.qualifies && !settled && "border-pos/40")}>
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="flex -space-x-1 shrink-0">
+          <TeamLogo name={home ?? ""} src={r.home_team?.logo_url} size={18} />
+          <TeamLogo name={away ?? ""} src={r.away_team?.logo_url} size={18} />
         </span>
-        <span className="truncate font-semibold text-ink-2">{r.match}</span>
+        <span className="truncate text-[13px] font-semibold text-ink-2">{r.match}</span>
       </div>
-      <div className="mt-1 text-2xs text-ink-4">{r.competition} · {fmtDateTime(r.kickoff_utc)}</div>
+      <div className="mt-0.5 truncate text-2xs text-ink-4">{r.competition} · {fmtDateTime(r.kickoff_utc)}</div>
 
-      <div className="mt-4 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-2xs font-semibold text-ink-3">Bet</div>
-          <div className="text-[16px] font-extrabold leading-tight">{selectionLabel(r.market, r.selection, home, away)}</div>
-        </div>
-        <div className="text-right shrink-0">
-          <div className="text-2xs font-semibold text-ink-3">Odds</div>
-          <div className="num text-[22px] font-extrabold leading-none">{odds(r.odds)}</div>
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="min-w-0 text-[16px] font-bold leading-tight">{selectionLabel(r.market, r.selection, home, away)}</div>
+        <div className="shrink-0 text-right">
+          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-4">Odds</div>
+          <div className="display num text-[28px]">{odds(r.odds)}</div>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-        <Metric label="Our chance" value={pct(r.probability, 0)} />
-        <Metric label="Bookmaker" value={pct(r.implied_probability, 0)} />
-        <Metric label="Value" value={signedPct(r.expected_value)} tone={r.expected_value > 0 ? "pos" : undefined} info={GLOSSARY.value} />
-      </div>
+      <MetricStrip items={[
+        ["Our chance", pct(r.probability, 0)],
+        ["Bookmaker", pct(r.implied_probability, 0)],
+        ["Value", signedPct(r.expected_value), r.expected_value > 0 ? "pos" : undefined, GLOSSARY.value],
+      ]} />
 
-      <div className="mt-4 pt-3 border-t border-white/[0.06] flex flex-wrap items-center justify-between gap-2">
+      <div className="mt-3 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2">
         {settled ? (
           <Pill tone={r.profit! > 0 ? "pos" : r.profit! < 0 ? "neg" : "neutral"}>{r.outcome} · {signedPct(r.profit)}</Pill>
         ) : r.qualifies ? (
           <Pill tone="pos" icon="check">Recommended</Pill>
         ) : (
-          <span className="text-xs text-ink-4 line-clamp-1" title={r.rejection_reasons.map(friendlyReason).join("\n")}>{friendlyReason(r.rejection_reasons[0])}</span>
+          <span className="min-w-0 flex-1 text-xs text-ink-4 line-clamp-1" title={r.rejection_reasons.map(friendlyReason).join("\n")}>{friendlyReason(r.rejection_reasons[0])}</span>
         )}
         <span className="flex items-center gap-3">
-          <ReliabilityBadge score={r.reliability_score} label={r.reliability_label} />
+          <ReliabilityBadge score={r.reliability_score} label={r.reliability_label} compact />
           {!settled && <Freshness hours={r.odds_age_hours} label="" />}
           {settled && r.clv !== null && <span className="text-2xs text-ink-4 num">CLV {signedPct(r.clv)}</span>}
         </span>
       </div>
     </Link>
-  );
-}
-
-function Metric({ label, value, tone, info }: { label: string; value: string; tone?: "pos"; info?: string }) {
-  return (
-    <div className="rounded-xl bg-white/[0.04] border border-white/[0.05] py-2 px-1">
-      <div className="flex items-center justify-center gap-0.5 text-2xs text-ink-3">{label}{info && <InfoTip text={info} />}</div>
-      <div className={cx("num text-[14px] font-extrabold mt-0.5", tone === "pos" ? "text-pos" : "text-ink")}>{value}</div>
-    </div>
   );
 }

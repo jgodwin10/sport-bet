@@ -4,7 +4,7 @@ import { useTopPickRecord, useTopPicks } from "../api/hooks";
 import type { TopPick, TopPickRecord, TopPickResult, TopPickTally } from "../api/types";
 import { Icon } from "../components/icons";
 import {
-  Card, cx, Empty, ErrorState, Freshness, InfoTip, Loading, PageHeader, Pill, ReliabilityBadge, Segmented, StatTile, TeamLogo,
+  Card, cx, Empty, ErrorState, Freshness, InfoTip, Loading, MetricStrip, PageHeader, Pill, ReliabilityBadge, Segmented, StatTile, TeamLogo,
 } from "../components/ui";
 import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { friendlyReason, GLOSSARY, selectionLabel } from "../lib/language";
@@ -62,7 +62,7 @@ function Upcoming() {
                   : "None of these pass every safety check yet. They show value but are a watchlist, not recommendations."}
               </p>
             )}
-            <ol className="grid gap-4 lg:grid-cols-2">
+            <ol className="grid gap-3 lg:gap-4 lg:grid-cols-2">
               {items.map((t, i) => <TopPickCard key={t.selection_id} t={t} delay={i} aiConfigured={q.data!.ai_configured} />)}
             </ol>
           </>
@@ -77,54 +77,55 @@ function TopPickCard({ t, delay, aiConfigured }: { t: TopPick; delay: number; ai
   return (
     <li style={{ animationDelay: `${Math.min(delay, 12) * 30}ms` }} className="animate-fade-up">
       <Link to={`/match/${t.fixture_id}`}
-            className={cx("card group flex h-full flex-col p-5 transition-all hover:-translate-y-0.5 hover:bg-white/[0.08]",
-                          recommended && "ring-1 ring-pos/35")}>
-        <div className="flex items-start gap-3">
-          <span className={cx("num grid place-items-center h-10 w-10 shrink-0 rounded-xl text-[17px] font-extrabold",
-                              t.rank <= 3 ? "bg-brand-soft text-brand-strong ring-1 ring-brand/30" : "bg-white/[0.06] text-ink-2")}>
-            {t.rank}
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="flex -space-x-1.5 shrink-0">
-                <TeamLogo name={home ?? ""} src={t.home_team?.logo_url} size={22} />
-                <TeamLogo name={away ?? ""} src={t.away_team?.logo_url} size={22} />
-              </span>
-              <span className="truncate text-[13px] font-semibold text-ink-2">{t.match}</span>
+            className={cx("card group relative flex h-full overflow-hidden transition-colors hover:border-line-strong",
+                          recommended && "border-pos/40")}>
+        {/* Rank rail */}
+        <div className={cx("flex w-12 sm:w-14 shrink-0 items-start justify-center pt-4 border-r border-line",
+                           t.rank <= 3 ? "bg-brand-soft text-brand" : "bg-night-3 text-ink-3")}>
+          <span className="display num text-[30px] sm:text-[34px]">{t.rank}</span>
+        </div>
+
+        <div className="min-w-0 flex-1 flex flex-col p-3.5 sm:p-4">
+          <div className="flex items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="flex -space-x-1 shrink-0">
+                  <TeamLogo name={home ?? ""} src={t.home_team?.logo_url} size={18} />
+                  <TeamLogo name={away ?? ""} src={t.away_team?.logo_url} size={18} />
+                </span>
+                <span className="truncate text-[13px] font-semibold text-ink-2">{t.match}</span>
+              </div>
+              <div className="mt-0.5 truncate text-2xs text-ink-4">{t.competition} · {fmtDateTime(t.kickoff_utc)}</div>
             </div>
-            <div className="mt-0.5 text-2xs text-ink-4">{t.competition} · {fmtDateTime(t.kickoff_utc)}</div>
+            {recommended
+              ? <Pill tone="pos" icon="check">Recommended</Pill>
+              : <Pill tone="warn" icon="alert" title={t.rejection_reasons.map(friendlyReason).join("\n")}>Watchlist</Pill>}
           </div>
-          {recommended
-            ? <Pill tone="pos" icon="check">Recommended</Pill>
-            : <Pill tone="warn" icon="alert" title={t.rejection_reasons.map(friendlyReason).join("\n")}>Watchlist</Pill>}
-        </div>
 
-        <div className="mt-4 flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-2xs font-semibold text-ink-3">Bet</div>
-            <div className="text-[16px] font-extrabold leading-tight">{selectionLabel(t.market, t.selection, home, away)}</div>
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <div className="min-w-0 text-[16px] sm:text-[17px] font-bold leading-tight">{selectionLabel(t.market, t.selection, home, away)}</div>
+            <div className="shrink-0 text-right">
+              <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-4">Odds</div>
+              <div className="display num text-[28px]">{odds(t.odds)}</div>
+            </div>
           </div>
-          <div className="text-right shrink-0">
-            <div className="text-2xs font-semibold text-ink-3">Odds</div>
-            <div className="num text-[22px] font-extrabold leading-none">{odds(t.odds)}</div>
+
+          <MetricStrip items={[
+            ["Our chance", pct(t.probability, 0)],
+            ["Bookmaker", pct(t.implied_probability, 0)],
+            ["Value", signedPct(t.expected_value), t.expected_value > 0 ? "pos" : undefined, GLOSSARY.value],
+          ]} />
+
+          {!recommended && t.rejection_reasons[0] && (
+            <p className="mt-2.5 text-xs text-ink-4 line-clamp-1">Held back: {friendlyReason(t.rejection_reasons[0])}</p>
+          )}
+
+          <AiRead t={t} configured={aiConfigured} />
+
+          <div className="mt-auto pt-2.5 flex items-center justify-end gap-3 border-t border-line">
+            <ReliabilityBadge score={t.reliability_score} label={t.reliability_label} />
+            <Freshness hours={t.odds_age_hours} label="" />
           </div>
-        </div>
-
-        <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-          <Metric label="Our chance" value={pct(t.probability, 0)} />
-          <Metric label="Bookmaker" value={pct(t.implied_probability, 0)} />
-          <Metric label="Value" value={signedPct(t.expected_value)} tone={t.expected_value > 0 ? "pos" : undefined} info={GLOSSARY.value} />
-        </div>
-
-        {!recommended && t.rejection_reasons[0] && (
-          <p className="mt-3 text-xs text-ink-4 line-clamp-1">Held back: {friendlyReason(t.rejection_reasons[0])}</p>
-        )}
-
-        <AiRead t={t} configured={aiConfigured} />
-
-        <div className="mt-auto pt-3 flex items-center justify-end gap-3 border-t border-white/[0.06]">
-          <ReliabilityBadge score={t.reliability_score} label={t.reliability_label} />
-          <Freshness hours={t.odds_age_hours} label="" />
         </div>
       </Link>
     </li>
@@ -135,22 +136,22 @@ function AiRead({ t, configured }: { t: TopPick; configured: boolean }) {
   const ai = t.ai;
   if (!ai) {
     return (
-      <div className="mt-4 mb-3 flex items-center gap-2 text-xs text-ink-4">
-        <Icon name="sparkle" size={14} />
+      <div className="mt-2.5 mb-2.5 flex items-center gap-2 text-xs text-ink-4">
+        <Icon name="sparkle" size={13} />
         {configured ? "AI analysis runs within 48 hours of kickoff." : "AI analysis is not set up on this server."}
       </div>
     );
   }
   return (
-    <div className="mt-4 mb-3 rounded-xl bg-white/[0.04] border border-white/[0.05] p-3">
+    <div className="mt-3 mb-2.5 glass-inset p-3">
       <div className="flex flex-wrap items-center gap-2 text-2xs font-semibold text-ink-3">
-        <Icon name="sparkle" size={13} className="text-brand-strong" />AI read
+        <Icon name="sparkle" size={13} className="text-brand" />AI read
         {ai.verdict === "supports" && <Pill tone="pos" icon="check">Still sees value{ai.probability !== null && ` · ${pct(ai.probability, 0)}`}</Pill>}
         {ai.verdict === "doubts" && <Pill tone="neg" icon="x">Doubts this bet{ai.probability !== null && ` · ${pct(ai.probability, 0)}`}</Pill>}
         {ai.confidence && <span className="text-ink-4 capitalize">{ai.confidence} confidence</span>}
         {!ai.current && <span className="text-ink-4">· written for an earlier prediction</span>}
       </div>
-      <p className="mt-1.5 text-[13px] text-ink-2 leading-relaxed line-clamp-3">{ai.summary}</p>
+      <p className="mt-1.5 text-[13px] text-ink-2 leading-relaxed line-clamp-2 sm:line-clamp-3">{ai.summary}</p>
     </div>
   );
 }
@@ -172,7 +173,7 @@ function Results() {
   const all = rec.summary.all;
   return (
     <>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
         <StatTile label="Profit" value={units(all.profit)} tone={all.profit > 0 ? "pos" : all.profit < 0 ? "neg" : undefined}
                   hint={`from ${all.settled} settled pick${all.settled === 1 ? "" : "s"}`} />
         <StatTile label="Return per pick" value={all.roi === null ? "—" : signedPct(all.roi)}
@@ -193,8 +194,8 @@ function Results() {
         <TierLine label="Watchlist" tone="warn" t={rec.summary.watchlist} />
       </div>
 
-      <Card title="Pick history" subtitle="Newest first" className="mt-6" flush>
-        <ul className="divide-y divide-white/[0.06]">
+      <Card title="Pick history" subtitle="Newest first" className="mt-6 bleed" flush>
+        <ul className="divide-soft">
           {rec.history.map((h) => <ResultRow key={h.fixture_id} h={h} />)}
         </ul>
       </Card>
@@ -222,8 +223,8 @@ function ResultRow({ h }: { h: TopPickResult }) {
   const win = h.outcome === "win" || h.outcome === "half_win", loss = h.outcome === "loss" || h.outcome === "half_loss";
   return (
     <li>
-      <Link to={`/match/${h.fixture_id}`} className={cx("flex items-center gap-3 px-4 sm:px-6 py-3 hover:bg-white/[0.04] transition-colors", !h.counted && "opacity-60")}>
-        <span className="num grid place-items-center h-8 w-8 shrink-0 rounded-lg bg-white/[0.06] text-[13px] font-bold text-ink-2">{h.rank}</span>
+      <Link to={`/match/${h.fixture_id}`} className={cx("flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-white/[0.025] transition-colors", !h.counted && "opacity-60")}>
+        <span className="display num grid place-items-center h-9 w-9 shrink-0 rounded-lg bg-night-3 text-[18px] text-ink-2">{h.rank}</span>
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13.5px] font-semibold">{selectionLabel(h.market, h.selection, home, away)} <span className="num text-ink-3">@ {odds(h.odds)}</span></div>
           <div className="truncate text-2xs text-ink-4">
@@ -239,14 +240,5 @@ function ResultRow({ h }: { h: TopPickResult }) {
         </div>
       </Link>
     </li>
-  );
-}
-
-function Metric({ label, value, tone, info }: { label: string; value: string; tone?: "pos"; info?: string }) {
-  return (
-    <div className="rounded-xl bg-white/[0.04] border border-white/[0.05] py-2 px-1">
-      <div className="flex items-center justify-center gap-0.5 text-2xs text-ink-3">{label}{info && <InfoTip text={info} />}</div>
-      <div className={cx("num text-[14px] font-extrabold mt-0.5", tone === "pos" ? "text-pos" : "text-ink")}>{value}</div>
-    </div>
   );
 }

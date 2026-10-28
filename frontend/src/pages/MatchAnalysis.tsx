@@ -8,9 +8,9 @@ import { Icon, type IconName } from "../components/icons";
 import Lineups from "../components/Lineups";
 import {
   AXIS, Card, ChartTooltip, ClassificationBadge, cx, Disclosure, Empty, ErrorState, FormPills, Freshness, InfoTip,
-  KeyValue, Loading, OUTCOME_COLORS, OutcomeBar, Pill, ReliabilityBadge, Segmented, SERIES, StatTile, TeamLogo,
+  KeyValue, Loading, MetricStrip, OUTCOME_COLORS, OutcomeBar, Pill, ReliabilityBadge, Segmented, SERIES, StatTile, TeamLogo,
 } from "../components/ui";
-import { fmtDate, fmtDateTime, num, odds, pct, signedPct } from "../lib/format";
+import { fmtDate, fmtDateTime, fmtTime, num, odds, pct, signedPct } from "../lib/format";
 import { bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plainFacts, selectionLabel, verdict } from "../lib/language";
 
 const TABS = [
@@ -35,15 +35,15 @@ export default function MatchAnalysis() {
 
   return (
     <>
-      <Link to="/" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-3 hover:text-ink mb-4">
+      <Link to="/" className="inline-flex items-center gap-1 text-[13px] font-semibold text-ink-3 hover:text-ink mb-3 sm:mb-4">
         <Icon name="chevronLeft" size={16} />Matches
       </Link>
       <Hero a={a} />
-      <div className="sticky top-[76px] sm:top-[84px] z-20 my-5 flex justify-center">
-        <Segmented fill label="Match sections" value={tab} options={[...TABS]}
+      <div className="sticky top-14 lg:top-0 z-20 -mx-4 sm:-mx-6 lg:mx-0 mt-3 mb-4 sm:mb-6 px-2 sm:px-4 lg:px-0 bg-night/95 backdrop-blur-md">
+        <Segmented variant="tabs" label="Match sections" value={tab} options={[...TABS]}
                    onChange={(v) => setParams(v === "summary" ? {} : { tab: v }, { replace: true })} />
       </div>
-      <div className="space-y-6 animate-fade-up" key={tab}>
+      <div className="space-y-4 sm:space-y-6 animate-fade-up" key={tab}>
         {tab === "summary" && (p ? <Summary a={a} p={p} /> : <NoPrediction />)}
         {tab === "lineups" && <Lineups a={a} />}
         {tab === "stats" && <Stats a={a} />}
@@ -74,42 +74,46 @@ function Hero({ a }: { a: Analysis }) {
   const conf = p ? CONFIDENCE[p.reliability.label] : null;
   return (
     <section className="card relative overflow-hidden">
-      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(60%_80%_at_15%_0%,rgba(57,135,229,0.18),transparent_60%),radial-gradient(60%_80%_at_85%_0%,rgba(217,89,38,0.16),transparent_60%)]" />
+      {/* Home / away colour bar */}
+      <div aria-hidden className="flex h-1"><span className="flex-1 bg-home" /><span className="flex-1 bg-away" /></div>
       <div className="relative">
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-5 pt-5 text-xs font-semibold text-ink-3">
-          <span>{f.competition.name}</span><span className="text-ink-4">•</span>
-          <span className="flex items-center gap-1.5"><Icon name="clock" size={13} />{fmtDateTime(f.kickoff_utc)}</span>
+        <div className="flex flex-wrap items-center justify-center gap-x-2.5 gap-y-1 px-4 pt-4 sm:pt-5 text-2xs font-bold uppercase tracking-[0.08em] text-ink-3">
+          <span>{f.competition.name}</span><span className="text-ink-4">·</span>
+          <span>{fmtDateTime(f.kickoff_utc)}</span>
         </div>
 
-        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-8 px-4 sm:px-10 pt-6 pb-5">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-2 sm:gap-8 px-3 sm:px-10 pt-4 sm:pt-6 pb-4">
           {[f.home_team, null, f.away_team].map((t, i) => t ? (
             <div key={t.id} className="flex flex-col items-center text-center min-w-0">
-              <TeamLogo name={t.name} src={t.logo_url} size={72} className="sm:!w-[88px] sm:!h-[88px]" />
-              <h1 className="mt-3 text-[16px] sm:text-[22px] font-extrabold tracking-[-0.02em] leading-tight break-words">{t.name}</h1>
-              <span className="mt-1 text-2xs font-semibold uppercase tracking-wider text-ink-4">{i === 0 ? "Home" : "Away"}</span>
+              <TeamLogo name={t.name} src={t.logo_url} size={60} className="sm:!w-[84px] sm:!h-[84px]" />
+              <h1 className="mt-2.5 display uppercase text-[20px] sm:text-[28px] leading-[1.05] break-words">{t.name}</h1>
+              <span className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-ink-4">{i === 0 ? "Home" : "Away"}</span>
             </div>
           ) : (
-            <div key="mid" className="pt-6 sm:pt-8 text-center">
+            <div key="mid" className="pt-4 sm:pt-6 text-center">
               {f.score ? (
-                <div className="num text-[34px] sm:text-[44px] font-extrabold tracking-tight leading-none">{f.score.home}<span className="text-ink-4 mx-1">–</span>{f.score.away}</div>
+                <div className="display num text-[44px] sm:text-[60px]">{f.score.home}<span className="text-ink-4 mx-1">–</span>{f.score.away}</div>
               ) : (
-                <div className="grid place-items-center h-11 w-11 sm:h-12 sm:w-12 rounded-full bg-white/[0.07] border border-white/[0.1] text-xs font-extrabold text-ink-3">VS</div>
+                <div>
+                  <div className="display num text-[30px] sm:text-[40px]">{fmtTime(f.kickoff_utc).split(" ")[0]}</div>
+                  <div className="mt-1 text-[10px] font-bold uppercase tracking-[0.1em] text-ink-4">Kickoff</div>
+                </div>
               )}
             </div>
           ))}
         </div>
 
         {p && r && lead && (
-          <div className="px-5 sm:px-10 pb-6">
-            <p className="text-center text-[15px] sm:text-[17px] text-ink-2">
-              Most likely: <b className="text-ink font-extrabold">{outcomeLabel(lead, f.home_team.name, f.away_team.name)}</b>{" "}
-              <span className="num font-bold text-ink">({pct(r[lead], 0)})</span>
+          <div className="px-4 sm:px-10 pb-5">
+            <p className="text-center text-[14px] sm:text-[16px] text-ink-3">
+              Most likely <b className="text-ink font-bold">{outcomeLabel(lead, f.home_team.name, f.away_team.name)}</b>{" "}
+              <span className="display num text-[20px] text-brand">{pct(r[lead], 0)}</span>
             </p>
-            <div className="mt-4 max-w-xl mx-auto"><OutcomeBar size="lg" p={r} labels={["Home", "Draw", "Away"]} /></div>
+            <div className="mt-3 max-w-xl mx-auto"><OutcomeBar size="lg" p={r} labels={["Home", "Draw", "Away"]} /></div>
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-center gap-2 px-4 py-4 border-t border-white/[0.06] bg-black/10">
+        <div className="flex flex-wrap items-center justify-center gap-2 px-3 py-3 border-t border-line bg-night/40">
           {p && <ClassificationBadge value={p.classification} />}
           {p && conf && <Pill tone={conf.tone} icon="shield" title={GLOSSARY.confidence}>Data confidence: {conf.label}</Pill>}
           <Pill tone={p?.lineup_status === "confirmed" ? "pos" : "neutral"} icon="users">
@@ -140,15 +144,15 @@ function Summary({ a, p }: { a: Analysis; p: PredictionDetail }) {
     <>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
         {/* Verdict */}
-        <section className={cx("card p-5 sm:p-6", qual.length && "ring-1 ring-pos/30")}>
+        <section className={cx("card p-4 sm:p-5", qual.length && "border-pos/40")}>
           <div className="eyebrow">Our verdict</div>
           <div className="mt-3 flex items-start gap-4">
-            <span className={cx("grid place-items-center h-12 w-12 rounded-2xl shrink-0",
-              v.tone === "pos" ? "bg-pos-soft text-pos" : v.tone === "warn" ? "bg-warn-soft text-warn" : "bg-white/[0.07] text-ink-2")}>
+            <span className={cx("grid place-items-center h-11 w-11 rounded-xl shrink-0",
+              v.tone === "pos" ? "bg-pos-soft text-pos" : v.tone === "warn" ? "bg-warn-soft text-warn" : "bg-night-3 text-ink-2")}>
               <Icon name={qual.length ? "sparkle" : v.tone === "warn" ? "alert" : "ban"} size={22} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-[20px] font-extrabold tracking-[-0.02em]">{v.label}</h2>
+              <h2 className="display uppercase text-[26px]">{v.label}</h2>
               <p className="mt-1 text-[14px] text-ink-2 leading-relaxed">{v.explain}</p>
             </div>
           </div>
@@ -157,11 +161,11 @@ function Summary({ a, p }: { a: Analysis; p: PredictionDetail }) {
               {qual.map((s) => <PickCard key={s.id} s={s} home={f.home_team.name} away={f.away_team.name} />)}
             </div>
           ) : best ? (
-            <div className="mt-5 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+            <div className="mt-4 glass-inset p-4">
               <div className="text-xs font-semibold text-ink-3">Closest bet we looked at</div>
               <div className="mt-1 flex items-center justify-between gap-3">
                 <span className="text-[15px] font-bold">{selectionLabel(best.market, best.selection, f.home_team.name, f.away_team.name)}</span>
-                <span className="num font-extrabold">{odds(best.odds)}</span>
+                <span className="display num text-[22px]">{odds(best.odds)}</span>
               </div>
               <div className="mt-2 text-xs text-ink-3">Why we passed:</div>
               <ul className="mt-1.5 space-y-1">
@@ -178,12 +182,12 @@ function Summary({ a, p }: { a: Analysis; p: PredictionDetail }) {
           <ul className="space-y-3.5">
             {facts.map((e, i) => (
               <li key={i} className="flex gap-3">
-                <span className="grid place-items-center h-8 w-8 rounded-xl bg-white/[0.06] text-ink-2 shrink-0"><Icon name={e.icon as IconName} size={15} /></span>
-                <p className="text-[14.5px] text-ink-2 leading-relaxed pt-1">{e.text}</p>
+                <span className="grid place-items-center h-8 w-8 rounded-lg bg-night-3 text-brand shrink-0"><Icon name={e.icon as IconName} size={15} /></span>
+                <p className="text-[14px] text-ink-2 leading-relaxed pt-1">{e.text}</p>
               </li>
             ))}
           </ul>
-          <Link to="?tab=details" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-brand-strong hover:underline">
+          <Link to="?tab=details" className="mt-4 inline-flex items-center gap-1 text-[13px] font-semibold text-brand hover:underline">
             See the full breakdown<Icon name="chevronRight" size={14} />
           </Link>
         </Card>
@@ -193,8 +197,8 @@ function Summary({ a, p }: { a: Analysis; p: PredictionDetail }) {
 
       {/* Goals at a glance */}
       <div>
-        <h2 className="h-section mb-3">Goals at a glance</h2>
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <h2 className="eyebrow mb-2.5">Goals at a glance</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
           {m.totals?.["2.5"] && <StatTile label="Over 2.5 goals" value={pct(m.totals["2.5"].over, 0)} hint={`Under: ${pct(m.totals["2.5"].under, 0)}`} />}
           {m.btts && <StatTile label="Both teams score" value={pct(m.btts.yes, 0)} hint={`No: ${pct(m.btts.no, 0)}`} />}
           {m.expected_goals && <StatTile label="Expected goals" value={`${num(m.expected_goals.home, 1)} – ${num(m.expected_goals.away, 1)}`} hint="home – away" />}
@@ -203,7 +207,7 @@ function Summary({ a, p }: { a: Analysis; p: PredictionDetail }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
         <StatTile label={`${f.home_team.name} or draw`} value={pct(m.double_chance["1X"], 0)} hint="Double chance 1X" />
         <StatTile label={`${f.away_team.name} or draw`} value={pct(m.double_chance.X2, 0)} hint="Double chance X2" />
         <StatTile label="Either team wins" value={pct(m.double_chance["12"], 0)} hint="No draw" />
@@ -264,7 +268,7 @@ function AiAnalysisCard({ a, p }: { a: Analysis; p: PredictionDetail }) {
             </div>
           )}
           {c.model_assessment && (
-            <div className="rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4">
+            <div className="glass-inset p-4">
               <div className="text-xs font-semibold text-ink-3">Does the news change the picture?</div>
               <p className="mt-1 text-[14px] text-ink-2 leading-relaxed">{c.model_assessment}</p>
             </div>
@@ -319,7 +323,7 @@ function AiAnalysisCard({ a, p }: { a: Analysis; p: PredictionDetail }) {
                 {analysis.sources.map((s) => (
                   <li key={s.uri}>
                     <a href={s.uri} target="_blank" rel="noopener noreferrer nofollow"
-                       className="inline-flex items-center gap-1.5 text-[13px] text-brand-strong hover:underline break-all">
+                       className="inline-flex items-center gap-1.5 text-[13px] text-brand hover:underline break-all">
                       <Icon name="external" size={12} className="shrink-0" />{s.title}
                     </a>
                   </li>
@@ -335,17 +339,13 @@ function AiAnalysisCard({ a, p }: { a: Analysis; p: PredictionDetail }) {
 
 function PickCard({ s, home, away }: { s: PredictionSelection; home: string; away: string }) {
   return (
-    <div className="rounded-2xl border border-pos/30 bg-pos-soft p-4">
+    <div className="rounded-xl border border-pos/40 bg-pos-soft p-3.5">
       <div className="flex items-center justify-between gap-3">
         <span className="text-[15px] font-bold">{selectionLabel(s.market, s.selection, home, away)}</span>
-        <span className="num text-[18px] font-extrabold">{odds(s.odds)}</span>
+        <span className="display num text-[26px]">{odds(s.odds)}</span>
       </div>
-      <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-        {[["Our chance", pct(s.probability, 0)], ["Bookmaker", pct(s.implied_probability, 0)], ["Value", signedPct(s.expected_value)]].map(([k, v]) => (
-          <div key={k} className="rounded-xl bg-black/15 py-2"><div className="text-2xs text-ink-3">{k}</div><div className="num font-extrabold mt-0.5">{v}</div></div>
-        ))}
-      </div>
-      <p className="mt-3 text-2xs text-ink-3">Best price at {bookmakerName(s.bookmaker)}. Value is an estimate, not a promise.</p>
+      <MetricStrip items={[["Our chance", pct(s.probability, 0)], ["Bookmaker", pct(s.implied_probability, 0)], ["Value", signedPct(s.expected_value), "pos"]]} />
+      <p className="mt-2.5 text-2xs text-ink-3">Best price at {bookmakerName(s.bookmaker)}. Value is an estimate, not a promise.</p>
     </div>
   );
 }
@@ -376,7 +376,7 @@ function Stats({ a }: { a: Analysis }) {
   return (
     <>
       <Card title="Form side by side" flush>
-        <div className="grid grid-cols-[minmax(0,1fr)_100px_100px] sm:grid-cols-[minmax(0,1fr)_150px_150px] items-end gap-x-2 px-5 sm:px-6 pb-4 border-b border-white/[0.06]">
+        <div className="grid grid-cols-[minmax(0,1fr)_100px_100px] sm:grid-cols-[minmax(0,1fr)_150px_150px] items-end gap-x-2 px-5 sm:px-6 pb-4 border-b border-line">
           <span className="eyebrow pb-1">Last 5</span>
           {[[f.home_team, hs.sequence], [f.away_team, as.sequence]].map(([t, seq]: any) => (
             <div key={t.id} className="flex flex-col items-center gap-2 min-w-0">
@@ -402,7 +402,7 @@ function Stats({ a }: { a: Analysis }) {
             })}
           </tbody>
         </table>
-        <p className="px-5 sm:px-6 py-4 text-xs text-ink-4 border-t border-white/[0.06]">The better figure in each row is in bold.</p>
+        <p className="px-5 sm:px-6 py-4 text-xs text-ink-4 border-t border-line">The better figure in each row is in bold.</p>
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2 items-start">
@@ -430,7 +430,7 @@ function Stats({ a }: { a: Analysis }) {
           {a.head_to_head.length === 0 ? <p className="text-[14px] text-ink-3">These teams haven't met in our records.</p> : (
             <ul className="space-y-2">
               {a.head_to_head.slice(0, 6).map((m, i) => (
-                <li key={i} className={cx("rounded-2xl bg-white/[0.03] border border-white/[0.05] px-3 py-2.5", m.age_days > 1095 && "opacity-50")}>
+                <li key={i} className={cx("glass-inset px-3 py-2.5", m.age_days > 1095 && "opacity-50")}>
                   <div className="text-2xs text-ink-4 text-center">{fmtDate(m.date)}</div>
                   <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-3 items-center text-[13.5px]">
                     <span className="flex items-center justify-end gap-2 min-w-0"><span className="truncate">{m.home}</span><TeamLogo name={m.home} src={m.home_logo} size={20} /></span>
@@ -482,7 +482,7 @@ function TeamNews({ a }: { a: Analysis }) {
   return (
     <Card title="Team news" subtitle="Injuries, suspensions and lineups">
       {a.availability.length === 0 && a.lineups.length === 0 ? (
-        <div className="flex gap-3 rounded-2xl bg-white/[0.04] border border-white/[0.06] p-4 text-[13.5px] text-ink-2">
+        <div className="flex gap-3 glass-inset p-4 text-[13.5px] text-ink-2">
           <Icon name="users" size={18} className="text-ink-3 shrink-0 mt-0.5" />
           <span>No team news yet. Lineups usually appear about an hour before kickoff (requires the API-Football data source). Missing news lowers data confidence.</span>
         </div>
@@ -563,7 +563,7 @@ function OddsValue({ a, p }: { a: Analysis; p: PredictionDetail }) {
                   <div className="mt-0.5 text-xs text-ink-3">Our chance <b className="num text-ink-2">{pct(s.probability, 0)}</b> · bookmaker <b className="num text-ink-2">{pct(s.implied_probability, 0)}</b> · {bookmakerName(s.bookmaker)}</div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className="num text-[17px] font-extrabold">{odds(s.odds)}</div>
+                  <div className="display num text-[22px]">{odds(s.odds)}</div>
                   <div className={cx("num text-xs font-bold", s.expected_value > 0 ? "text-pos" : "text-ink-4")}>{signedPct(s.expected_value)}</div>
                 </div>
               </div>
@@ -580,7 +580,7 @@ function OddsValue({ a, p }: { a: Analysis; p: PredictionDetail }) {
 
       <Card title="Bookmaker odds" subtitle={`Match result · updated ${fmtDateTime(a.odds.latest_observed)}`} action={<Freshness hours={a.odds.age_hours} label="" />} flush>
         {books.length === 0 ? <Empty title="No odds available" icon="target" /> : (
-          <table className="table">
+          <div className="scroll-x"><table className="table min-w-[340px]">
             <thead><tr><th className="pl-5 sm:pl-6">Bookmaker</th><th className="text-center">Home</th><th className="text-center">Draw</th><th className="text-center pr-5 sm:pr-6">Away</th></tr></thead>
             <tbody>
               {books.map((bk) => (
@@ -598,9 +598,9 @@ function OddsValue({ a, p }: { a: Analysis; p: PredictionDetail }) {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
-        <p className="px-5 sm:px-6 py-4 text-xs text-ink-4 border-t border-white/[0.06]">Highlighted = best price. “Market average/maximum” rows are aggregates.</p>
+        <p className="px-5 sm:px-6 py-4 text-xs text-ink-4 border-t border-line">Highlighted = best price. “Market average/maximum” rows are aggregates.</p>
       </Card>
     </>
   );
@@ -643,7 +643,7 @@ function ModelBreakdown({ a, p }: { a: Analysis; p: PredictionDetail }) {
         Three statistical models and the bookmaker market each estimate the result. They are blended using weights learned
         from past seasons ({p.components.weights_source}).
       </p>
-      <table className="table mt-3 [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3">
+      <div className="scroll-x"><table className="table mt-3 min-w-[320px] [&_td]:px-2 [&_th]:px-2 sm:[&_td]:px-3 sm:[&_th]:px-3">
         <thead><tr><th className="!pl-0">Model</th><th className="text-right">Home</th><th className="text-right">Draw</th><th className="text-right">Away</th><th className="text-right !pr-0">Weight</th></tr></thead>
         <tbody>
           {Object.entries(p.components.one_x_two).map(([name, v]) => (
@@ -663,7 +663,7 @@ function ModelBreakdown({ a, p }: { a: Analysis; p: PredictionDetail }) {
             <td />
           </tr>
         </tbody>
-      </table>
+      </table></div>
       <p className="mt-3 text-xs text-ink-4">Small numbers under the blend are the plausible range <InfoTip text={GLOSSARY.interval} />. Models disagree by {p.components.disagreement === null ? "n/a" : num(p.components.disagreement)} (0 = perfect agreement). {a.fixture.home_team.name} at home.</p>
     </Disclosure>
   );
@@ -701,7 +701,7 @@ function AllReasons({ p }: { p: PredictionDetail }) {
               </span>
               <Icon name="chevronDown" size={15} className={cx("text-ink-4 mt-1 shrink-0 transition-transform", open === i && "rotate-180")} />
             </button>
-            {open === i && <pre className="mb-3 scroll-x rounded-xl bg-black/30 border border-white/[0.06] p-3 text-2xs text-ink-3 font-mono">{JSON.stringify(e.evidence, null, 2)}</pre>}
+            {open === i && <pre className="mb-3 scroll-x rounded-xl bg-black/30 border border-line p-3 text-2xs text-ink-3 font-mono">{JSON.stringify(e.evidence, null, 2)}</pre>}
           </li>
         ))}
       </ol>
@@ -739,7 +739,7 @@ function AsianHandicap({ p }: { p: PredictionDetail }) {
   const lines = ["-1.50", "-1.00", "-0.75", "-0.50", "-0.25", "+0.00", "+0.25", "+0.50", "+1.00"].filter((k) => ah[k]);
   return (
     <Disclosure title="Asian handicap outcomes (home side)">
-      <table className="table [&_td]:px-1.5 [&_th]:px-1.5 sm:[&_td]:px-3 sm:[&_th]:px-3">
+      <div className="scroll-x"><table className="table min-w-[320px] [&_td]:px-1.5 [&_th]:px-1.5 sm:[&_td]:px-3 sm:[&_th]:px-3">
         <thead><tr><th className="!pl-0">Line</th><th className="text-right">Win</th><th className="text-right">½ win</th><th className="text-right">Push</th><th className="text-right">½ loss</th><th className="text-right !pr-0">Loss</th></tr></thead>
         <tbody>
           {lines.map((k) => (
@@ -751,7 +751,7 @@ function AsianHandicap({ p }: { p: PredictionDetail }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </Disclosure>
   );
 }
@@ -760,7 +760,7 @@ function History({ a }: { a: Analysis }) {
   return (
     <Disclosure title={`Prediction history (${a.prediction_history.length})`}>
       <p className="text-[13px] text-ink-3 mb-4">Every update is saved; old predictions are never edited.</p>
-      <ol className="relative ml-1.5 border-l border-white/10 space-y-5">
+      <ol className="relative ml-1.5 border-l border-line-strong space-y-5">
         {a.prediction_history.map((h, i) => (
           <li key={h.id} className="pl-5 relative">
             <span className={cx("absolute -left-[6px] top-1.5 h-3 w-3 rounded-full ring-4 ring-night-2", i === 0 ? "bg-brand" : "bg-white/25")} />
@@ -792,7 +792,7 @@ function DataSources({ a }: { a: Analysis }) {
       ]} />
       <ul className="mt-4 space-y-2">
         {a.sources.map((s) => (
-          <li key={s.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/[0.03] border border-white/[0.05] px-3 py-2.5 text-[13px]">
+          <li key={s.id} className="flex items-center justify-between gap-3 glass-inset px-3 py-2.5 text-[13px]">
             <span className="min-w-0"><span className="block capitalize font-medium">{s.provider.replace(/_/g, " ")}</span><span className="block text-2xs text-ink-4 font-mono truncate">{s.resource}</span></span>
             <span className="text-right text-xs text-ink-3 shrink-0">{fmtDateTime(s.retrieved_at)}</span>
           </li>
