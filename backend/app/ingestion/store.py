@@ -29,6 +29,8 @@ log = logging.getLogger(__name__)
 
 # Fixture-creating providers. Others (odds-only) are matched to existing fixtures.
 FIXTURE_SOURCES = {"football_data_co_uk", "football_data_org", "api_football"}
+# Cups have no free schedule source, so The Odds API's event list may create their fixtures.
+CUP_FIXTURE_SOURCES = FIXTURE_SOURCES | {"the_odds_api"}
 
 
 @dataclass
@@ -58,7 +60,7 @@ class Store:
         comp = self.db.scalar(select(Competition).where(Competition.code == code))
         if comp is None:
             d = COMPETITIONS[code]
-            comp = Competition(code=code, name=d.name, country=d.country, tier=d.tier)
+            comp = Competition(code=code, name=d.name, country=d.country, tier=d.tier, format=d.format)
             self.db.add(comp)
             self.db.flush()
         return comp
@@ -125,7 +127,7 @@ class Store:
 
     def _match_or_create(self, nf: NormalizedFixture, src: SourceRecord, stats: StoreStats) -> Fixture | None:
         comp = self.competition(nf.competition_code)
-        create = nf.provider in FIXTURE_SOURCES
+        create = nf.provider in (CUP_FIXTURE_SOURCES if comp.format == "cup" else FIXTURE_SOURCES)
         home = self.teams.resolve(nf.provider, nf.home_name, nf.competition_code, can_create=create)
         away = self.teams.resolve(nf.provider, nf.away_name, nf.competition_code, can_create=create)
         if home is None or away is None:
@@ -143,13 +145,19 @@ class Store:
             fixture = self.db.get(Fixture, mapped) if mapped else None
         if fixture is None:
             fixture = self.db.scalar(select(Fixture).where(Fixture.natural_key == natural_key))
-        if fixture is None and nf.provider not in FIXTURE_SOURCES:
+        if fixture is None and not create:
             window = timedelta(days=3)
             fixture = self.db.scalar(select(Fixture).where(
                 Fixture.home_team_id == home, Fixture.away_team_id == away,
                 Fixture.kickoff_utc.between(nf.kickoff_utc - window, nf.kickoff_utc + window)))
+        elif fixture is None and comp.format == "cup":
+            # Cup keys carry the date, which sources can disagree on: match the tie in a window instead
+            window = timedelta(days=3)
+            fixture = self.db.scalar(select(Fixture).where(
+                Fixture.competition_id == comp.id, Fixture.home_team_id == home, Fixture.away_team_id == away,
+                Fixture.kickoff_utc.between(nf.kickoff_utc - window, nf.kickoff_utc + window)))
         if fixture is None:
-            if nf.provider not in FIXTURE_SOURCES:
+            if not create:
                 stats.unmatched.append(f"{nf.competition_code}: {nf.home_name} v {nf.away_name} (no fixture)")
                 return None
             fixture = Fixture(natural_key=natural_key, competition_id=comp.id, season_id=season_id,

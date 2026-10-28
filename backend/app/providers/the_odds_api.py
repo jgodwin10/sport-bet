@@ -1,7 +1,8 @@
 """The Odds API v4 adapter (API key required; usage is metered in credits:
 each call costs markets x regions credits, free tier = 500 credits/month).
 Provides live pre-match 1X2 (h2h) and totals prices from many bookmakers with
-per-bookmaker update timestamps."""
+per-bookmaker update timestamps. The event list (no prices) is free and is the
+fixture source for cups; recent scores cost 2 credits per call."""
 
 from __future__ import annotations
 
@@ -41,8 +42,22 @@ def parse_events(payload: list[dict], competition_code: str) -> list[NormalizedF
         out.append(NormalizedFixture(
             provider=PROVIDER, provider_fixture_id=ev["id"], competition_code=competition_code,
             season_label=season_of(kickoff.date()), home_name=home, away_name=away, kickoff_utc=kickoff,
-            status="scheduled", odds=odds,
+            status="scheduled", odds=odds, stage=COMPETITIONS[competition_code].format,
         ))
+    return out
+
+
+def parse_scores(payload: list[dict], competition_code: str) -> list[NormalizedFixture]:
+    """Completed events only; scores of matches still in play are ignored."""
+    out = []
+    for ev in parse_events([e for e in payload if e.get("completed") and e.get("scores")], competition_code):
+        raw = next(e for e in payload if e["id"] == ev.provider_fixture_id)
+        goals = {s["name"]: int(s["score"]) for s in raw["scores"]}
+        if ev.home_name not in goals or ev.away_name not in goals:
+            continue
+        ev.status = "finished"
+        ev.home_goals, ev.away_goals = goals[ev.home_name], goals[ev.away_name]
+        out.append(ev)
     return out
 
 
@@ -62,23 +77,41 @@ class TheOddsApi:
     def capabilities(self) -> dict[str, object]:
         return {
             "requires_key": True, "odds": "pre-match 1X2 and totals, many bookmakers, timestamped",
-            "fixtures": "only events with prices", "results": False, "injuries": False, "lineups": False,
+            "fixtures": "only events with prices; fixture source for cups", "results": "cups, last 3 days",
+            "injuries": False, "lineups": False,
             "competitions": sorted(BY_ODDS_API[k].code for k in BY_ODDS_API),
             "cost": "markets x regions credits per call",
         }
 
-    def odds(self, competition_code: str) -> ProviderBatch:
+    def _sport(self, competition_code: str) -> str:
         if not self.configured:
             raise ProviderNotConfigured("THE_ODDS_API_KEY is not set")
         sport = COMPETITIONS[competition_code].odds_api
         if not sport:
             raise ValueError(f"{competition_code} not covered by {self.name}")
-        resource = f"/sports/{sport}/odds"
+        return sport
+
+    def _batch(self, res, resource: str, fixtures: list[NormalizedFixture]) -> ProviderBatch:
+        return ProviderBatch(self.name, resource, res.retrieved_at, res.sha256, self.trust_level, fixtures,
+                             meta={"requests_remaining": res.headers.get("x-requests-remaining")})
+
+    def events(self, competition_code: str) -> ProviderBatch:
+        """Scheduled events without prices (free of credits)."""
+        resource = f"/sports/{self._sport(competition_code)}/events"
+        res = self.client.get(BASE_URL + resource, params={"apiKey": self.api_key, "dateFormat": "iso"},
+                              cache_ttl=300)
+        return self._batch(res, resource, parse_events(json.loads(res.content), competition_code))
+
+    def scores(self, competition_code: str, days_from: int = 3) -> ProviderBatch:
+        resource = f"/sports/{self._sport(competition_code)}/scores"
+        res = self.client.get(BASE_URL + resource, params={
+            "apiKey": self.api_key, "daysFrom": days_from, "dateFormat": "iso"}, cache_ttl=300)
+        return self._batch(res, resource, parse_scores(json.loads(res.content), competition_code))
+
+    def odds(self, competition_code: str) -> ProviderBatch:
+        resource = f"/sports/{self._sport(competition_code)}/odds"
         res = self.client.get(BASE_URL + resource, params={
             "apiKey": self.api_key, "regions": self.regions, "markets": "h2h,totals",
             "oddsFormat": "decimal", "dateFormat": "iso",
         }, cache_ttl=300)
-        payload = json.loads(res.content)
-        return ProviderBatch(self.name, resource, res.retrieved_at, res.sha256, self.trust_level,
-                             parse_events(payload, competition_code),
-                             meta={"requests_remaining": res.headers.get("x-requests-remaining")})
+        return self._batch(res, resource, parse_events(json.loads(res.content), competition_code))

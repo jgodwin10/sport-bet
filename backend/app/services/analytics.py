@@ -16,16 +16,19 @@ from app.engine.features import MatchRecord
 from app.services.crests import crest_url
 
 
-def load_records(db: Session, competition_id: int, before: datetime, since: datetime | None = None) -> list[MatchRecord]:
-    """Finished matches with kickoff strictly before `before`, in kickoff order.
-    Team keys are internal team ids (as strings), never provider names."""
+def load_records(db: Session, competition_id: int | list[int], before: datetime,
+                 since: datetime | None = None) -> list[MatchRecord]:
+    """Finished matches with kickoff strictly before `before`, in kickoff order, from one
+    competition or several pooled ones. Team keys are internal team ids (as strings),
+    never provider names."""
+    ids = competition_id if isinstance(competition_id, list) else [competition_id]
     hs, as_ = aliased(TeamMatchStats), aliased(TeamMatchStats)
     q = (
         select(Fixture, MatchResult, hs, as_)
         .join(MatchResult, MatchResult.fixture_id == Fixture.id)
         .outerjoin(hs, and_(hs.fixture_id == Fixture.id, hs.team_id == Fixture.home_team_id))
         .outerjoin(as_, and_(as_.fixture_id == Fixture.id, as_.team_id == Fixture.away_team_id))
-        .where(Fixture.competition_id == competition_id, Fixture.kickoff_utc < before,
+        .where(Fixture.competition_id.in_(ids), Fixture.kickoff_utc < before,
                Fixture.status == "finished")
         .order_by(Fixture.kickoff_utc, Fixture.id)
     )
@@ -34,7 +37,7 @@ def load_records(db: Session, competition_id: int, before: datetime, since: date
     out = []
     for fx, res, h, a in db.execute(q):
         out.append(MatchRecord(
-            key=str(fx.id), kickoff=fx.kickoff_utc, pool=str(competition_id),
+            key=str(fx.id), kickoff=fx.kickoff_utc, pool=str(fx.competition_id),
             home=str(fx.home_team_id), away=str(fx.away_team_id),
             home_goals=res.home_goals, away_goals=res.away_goals,
             home_shots_on_target=h.shots_on_target if h else None,

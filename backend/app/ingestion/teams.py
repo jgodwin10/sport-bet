@@ -3,7 +3,7 @@
 football-data.co.uk names are canonical (it is the history source). Other
 providers' names resolve through, in order: a stored alias, a curated alias
 list, then a conservative fuzzy match restricted to teams in the same
-competition. Ambiguous names are recorded as unresolved conflicts and skipped -
+competition (for a cup, its feeder leagues). Ambiguous names are recorded as unresolved conflicts and skipped -
 we never guess which team a provider meant.
 """
 
@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import Competition, DataConflict, Fixture, Team, TeamAlias
+from app.ingestion.competitions import COMPETITIONS, pool_codes
 
 CANONICAL_PROVIDER = "football_data_co_uk"
 
@@ -60,6 +61,13 @@ CURATED_ALIASES: dict[str, list[str]] = {
     "Roma": ["AS Roma"],
     "Paris SG": ["Paris Saint Germain", "Paris Saint-Germain", "PSG"],
     "St Etienne": ["Saint Etienne", "Saint-Étienne", "AS Saint-Étienne"],
+    "Peterboro": ["Peterborough United", "Peterborough"],
+    "Bristol Rvs": ["Bristol Rovers"],
+    "MK Dons": ["Milton Keynes Dons"],
+    "Hearts": ["Heart of Midlothian"],
+    "Sp Lisbon": ["Sporting Lisbon", "Sporting CP"],
+    "Sp Braga": ["Braga", "SC Braga", "Sporting Braga"],
+    "PSV Eindhoven": ["PSV"],
 }
 
 
@@ -76,9 +84,22 @@ _CURATED_INDEX = {normalize(alias): normalize(canon) for canon, aliases in CURAT
                   for alias in aliases}
 
 
+def _abbreviates(short: list[str], long: list[str]) -> bool:
+    """Every token of `short` starts a distinct token of `long`, in order ("sp lisbon" ~ "sporting lisbon")."""
+    i = 0
+    for tok in short:
+        while i < len(long) and not long[i].startswith(tok):
+            i += 1
+        if i == len(long):
+            return False
+        i += 1
+    return True
+
+
 def similarity(a: str, b: str) -> float:
     score = SequenceMatcher(None, a, b).ratio()
-    if a and b and (set(a.split()) <= set(b.split()) or set(b.split()) <= set(a.split())):
+    ta, tb = a.split(), b.split()
+    if a and b and (set(ta) <= set(tb) or set(tb) <= set(ta) or _abbreviates(ta, tb) or _abbreviates(tb, ta)):
         score = max(score, 0.9)
     return score
 
@@ -158,9 +179,11 @@ class TeamResolver:
     def _competition_teams(self, competition_code: str | None) -> list[Team]:
         q = select(Team)
         if competition_code:
-            comp_id = self.db.scalar(select(Competition.id).where(Competition.code == competition_code))
+            # A cup's entrants mostly play in its feeder leagues, so those teams are candidates too
+            codes = pool_codes(competition_code) if competition_code in COMPETITIONS else [competition_code]
+            comp_ids = select(Competition.id).where(Competition.code.in_(codes))
             q = q.where(Team.id.in_(
-                select(Fixture.home_team_id).where(Fixture.competition_id == comp_id)
-            ) | Team.id.in_(select(Fixture.away_team_id).where(Fixture.competition_id == comp_id)))
+                select(Fixture.home_team_id).where(Fixture.competition_id.in_(comp_ids))
+            ) | Team.id.in_(select(Fixture.away_team_id).where(Fixture.competition_id.in_(comp_ids))))
         return list(self.db.scalars(q))
 

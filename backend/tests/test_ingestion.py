@@ -103,3 +103,31 @@ def test_odds_only_provider_does_not_create_fixtures(db):
     stats = Store(db).ingest_fixtures(make_batch([_fx(provider="the_odds_api", pid="e1")],
                                                  provider="the_odds_api", trust=80, resource="/odds"))
     assert stats.fixtures_created == 0 and stats.unmatched
+
+
+def test_cup_events_create_fixtures_for_league_teams_and_dedupe_by_window(db):
+    Store(db).ingest_fixtures(make_batch(synthetic_league(datetime(2025, 8, 10, tzinfo=timezone.utc), seasons=1)))
+    db.commit()
+    teams_before = db.scalar(select(func.count(Team.id)))
+    cup = dict(provider="the_odds_api", home="Synthetic Town 01 FC", away="Synthetic Town 02",
+               competition_code="ENG-LC", stage="cup")
+    first = Store(db).ingest_fixtures(make_batch([_cup_fx(pid="e1", **cup)], provider="the_odds_api", trust=80))
+    db.commit()
+    # Another source reports the same tie a day later: same fixture, not a second one
+    moved = Store(db).ingest_fixtures(make_batch([_cup_fx(kickoff=KICKOFF + timedelta(days=1), **{
+        **cup, "provider": "api_football"})], provider="api_football", trust=75))
+    assert first.fixtures_created == 1 and moved.fixtures_created == 0
+    assert db.scalar(select(func.count(Team.id))) == teams_before
+    assert db.scalar(select(Fixture.stage).where(Fixture.natural_key.like("ENG-LC:%"))) == "cup"
+
+
+def test_league_odds_from_odds_api_still_never_create_fixtures(db):
+    stats = Store(db).ingest_fixtures(make_batch([_cup_fx(provider="the_odds_api", competition_code="ENG-1")],
+                                                 provider="the_odds_api", trust=80))
+    assert stats.fixtures_created == 0
+
+
+def _cup_fx(provider, competition_code, kickoff=KICKOFF, home="Alpha", away="Beta", **kw):
+    return NormalizedFixture(provider=provider, provider_fixture_id=kw.pop("pid", None),
+                             competition_code=competition_code, season_label="2026-2027", home_name=home,
+                             away_name=away, kickoff_utc=kickoff, status="scheduled", **kw)

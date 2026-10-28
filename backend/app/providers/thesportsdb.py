@@ -25,7 +25,8 @@ LEAGUES = {
     "GER-2": "German 2. Bundesliga", "ESP-1": "Spanish La Liga", "ESP-2": "Spanish La Liga 2",
     "ITA-1": "Italian Serie A", "ITA-2": "Italian Serie B", "FRA-1": "French Ligue 1", "FRA-2": "French Ligue 2",
     "NED-1": "Dutch Eredivisie", "BEL-1": "Belgian Pro League", "POR-1": "Portuguese Primeira Liga",
-    "TUR-1": "Turkish Super Lig", "GRE-1": "Greek Superleague Greece",
+    "TUR-1": "Turkish Super Lig", "GRE-1": "Greek Superleague Greece", "ENG-5": "English National League",
+    "SCO-2": "Scottish Championship", "SCO-3": "Scottish League 1", "SCO-4": "Scottish League 2",
 }
 
 

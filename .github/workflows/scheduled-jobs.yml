@@ -2,11 +2,13 @@
 # Replaces Celery beat while the API runs with TASK_MODE=inline (no worker).
 #
 # Repo secrets (Settings -> Secrets and variables -> Actions): DATABASE_URL (Supabase session
-# pooler URI) and, optionally, GEMINI_API_KEYS, THE_ODDS_API_KEY, FOOTBALL_DATA_ORG_API_KEY.
+# pooler URI) and, optionally, GEMINI_API_KEYS, THE_ODDS_API_KEY, FOOTBALL_DATA_ORG_API_KEY,
+# API_FOOTBALL_KEY (cup history).
 #
 # Budgets: private repos get 2,000 Actions minutes/month, so the frequent run is every 2 hours
-# (~360 runs). The Odds API free tier is 500 credits/month and one refresh of 6 competitions
-# x 2 markets x 1 region costs 12, so odds refresh once a day.
+# (~360 runs). The Odds API free tier is 500 credits/month: its cup event lists are free, odds
+# (2 markets x 1 region = 2 credits) refresh once a day and only for cups with a tie in the next
+# 3 days, and cup scores (2 credits) are fetched only while a played tie lacks a result.
 name: Scheduled jobs
 
 on:
@@ -32,6 +34,7 @@ env:
   GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
   THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
   FOOTBALL_DATA_ORG_API_KEY: ${{ secrets.FOOTBALL_DATA_ORG_API_KEY }}
+  API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
 
 jobs:
   run:

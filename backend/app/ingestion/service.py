@@ -12,7 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.db.models import Fixture, IngestionJob, ProviderMapping
+from app.db.models import Competition, Fixture, IngestionJob, ProviderMapping, Season
+from app.engine.elo import season_of
 from app.ingestion.competitions import COMPETITIONS
 from app.ingestion.store import Store
 from app.providers.base import ProviderError, ProviderNotConfigured
@@ -78,6 +79,9 @@ class IngestionService:
         start = current_season_start(today)
         summary: dict[str, object] = {}
         for code in competitions:
+            if COMPETITIONS[code].format == "cup":
+                summary.update(self._cup_history(code, range(start - seasons + 1, start + 1), start))
+                continue
             if not COMPETITIONS[code].fdcuk:
                 continue
             for year in range(start - seasons + 1, start + 1):
@@ -90,6 +94,67 @@ class IngestionService:
                 stats = store.ingest_fixtures(batch)
                 self.db.commit()
                 summary[f"{code}:{year}"] = stats.as_dict()
+        return summary
+
+    def _cup_history(self, code: str, years: range, current: int) -> dict:
+        """Cup seasons from API-Football, one request each. A finished season is fetched once:
+        the free plan allows 100 requests a day and only some seasons."""
+        summary: dict[str, object] = {}
+        for year in years:
+            if year < current and self._has_results(code, season_of(date(year, 9, 1))):
+                continue
+            try:
+                batch = self.providers.api_football.season(code, year)
+            except ProviderNotConfigured:
+                return {code: "API_FOOTBALL_KEY not set: no cup history"}
+            except (ProviderError, ValueError) as exc:
+                summary[f"{code}:{year}"] = {"error": str(exc)}
+                continue
+            summary[f"{code}:{year}"] = Store(self.db).ingest_fixtures(batch).as_dict()
+            self.db.commit()
+        return summary
+
+    def _has_results(self, code: str, season_label: str) -> bool:
+        return self.db.scalar(
+            select(Fixture.id).join(Season, Season.id == Fixture.season_id)
+            .join(Competition, Competition.id == Fixture.competition_id)
+            .where(Competition.code == code, Season.label == season_label, Fixture.status == "finished")
+            .limit(1)) is not None
+
+    def _awaiting_result(self, code: str, now: datetime) -> bool:
+        """A fixture in this competition kicked off 2h-3d ago and still has no result."""
+        return self.db.scalar(
+            select(Fixture.id).join(Competition, Competition.id == Fixture.competition_id)
+            .where(Competition.code == code, Fixture.status == "scheduled",
+                   Fixture.kickoff_utc.between(now - timedelta(days=3), now - timedelta(hours=2)))
+            .limit(1)) is not None
+
+    def _upcoming_in(self, code: str, now: datetime, days: int) -> bool:
+        return self.db.scalar(
+            select(Fixture.id).join(Competition, Competition.id == Fixture.competition_id)
+            .where(Competition.code == code, Fixture.status == "scheduled",
+                   Fixture.kickoff_utc.between(now, now + timedelta(days=days)))
+            .limit(1)) is not None
+
+    def _cups(self, wanted: set[str], now: datetime) -> dict:
+        """Cup fixtures from The Odds API's free event list, and recent cup results (2 credits a
+        call) when a finished tie is still missing one and football-data.org doesn't cover it."""
+        summary: dict[str, object] = {}
+        odds_api, fdorg = self.providers.odds_api, self.providers.fdorg
+        if not odds_api.configured:
+            return summary
+        for code in sorted(c for c in wanted if COMPETITIONS[c].format == "cup" and COMPETITIONS[c].odds_api):
+            calls = [("events", odds_api.events)]
+            if self._awaiting_result(code, now) and not (COMPETITIONS[code].fdorg and fdorg.configured):
+                calls.append(("scores", odds_api.scores))
+            for label, call in calls:
+                try:
+                    batch = call(code)
+                except (ProviderError, ValueError) as exc:
+                    summary[f"the_odds_api:{label}:{code}"] = {"error": str(exc)}
+                    continue
+                summary[f"the_odds_api:{label}:{code}"] = Store(self.db).ingest_fixtures(batch).as_dict()
+                self.db.commit()
         return summary
 
     def upcoming(self, days_ahead: int = 10) -> dict:
@@ -105,6 +170,7 @@ class IngestionService:
             except ProviderError as exc:
                 summary["football_data_co_uk"] = {"error": str(exc)}
         today = datetime.now(timezone.utc).date()
+        summary.update(self._cups(wanted, datetime.now(timezone.utc)))
         for code in wanted:
             for label, call in (
                 ("football_data_org", lambda c=code: self.providers.fdorg.matches(c, today - timedelta(days=3),
@@ -114,9 +180,9 @@ class IngestionService:
             ):
                 try:
                     batch = call()
-                except ProviderNotConfigured:
-                    continue
-                except (ProviderError, ValueError) as exc:
+                except (ProviderNotConfigured, ValueError):
+                    continue  # no key, or the provider doesn't cover this competition
+                except ProviderError as exc:
                     summary[f"{label}:{code}"] = {"error": str(exc)}
                     continue
                 summary[f"{label}:{code}"] = Store(self.db).ingest_fixtures(batch).as_dict()
@@ -127,7 +193,14 @@ class IngestionService:
         summary: dict[str, object] = {}
         if not self.providers.odds_api.configured:
             return {"the_odds_api": "not configured; using odds from football-data.co.uk weekly file"}
+        now = datetime.now(timezone.utc)
+        priced = set(self.settings.odds_api_competitions)
         for code in self.settings.competitions:
+            if code not in priced or not COMPETITIONS[code].odds_api:
+                continue
+            if not self._upcoming_in(code, now, self.settings.odds_api_days_ahead):
+                summary[code] = f"skipped: no fixture in the next {self.settings.odds_api_days_ahead} days"
+                continue
             try:
                 batch = self.providers.odds_api.odds(code)
             except (ProviderError, ValueError) as exc:

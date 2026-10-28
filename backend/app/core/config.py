@@ -7,6 +7,8 @@ from functools import lru_cache
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.ingestion.competitions import CUPS
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
@@ -34,6 +36,10 @@ class Settings(BaseSettings):
     football_data_org_api_key: SecretStr | None = None
     the_odds_api_key: SecretStr | None = None
     the_odds_api_regions: str = "uk,eu"
+    # Competitions priced from The Odds API (each refresh costs credits). Leagues already get
+    # odds from football-data.co.uk's weekly file; cups have no other odds source.
+    odds_api_competitions: list[str] = CUPS
+    odds_api_days_ahead: int = 3  # only spend credits on competitions with a fixture this soon
     api_football_key: SecretStr | None = None
     thesportsdb_api_key: str = "123"  # free test key; crests only
     provider_timeout_seconds: float = 20.0
@@ -61,7 +67,11 @@ class Settings(BaseSettings):
         return [m.strip() for m in self.gemini_models.split(",") if m.strip()]
 
     # Competitions to track, by internal code (see app/ingestion/competitions.py)
-    competitions: list[str] = ["ENG-1", "ENG-2", "GER-1", "ESP-1", "ITA-1", "FRA-1"]
+    competitions: list[str] = [
+        "ENG-1", "ENG-2", "ENG-3", "ENG-4", "ENG-5", "SCO-1", "SCO-2", "SCO-3", "SCO-4", "GER-1", "GER-2",
+        "ESP-1", "ESP-2", "ITA-1", "ITA-2", "FRA-1", "FRA-2", "NED-1", "BEL-1", "POR-1", "TUR-1", "GRE-1",
+        *CUPS,
+    ]
     history_seasons: int = 4
 
     # Model hyper-parameters

@@ -14,6 +14,7 @@ from app.db.models import (
 from app.engine.features import MatchRecord
 from app.engine.pipeline import ModelSuite, SuiteConfig
 from app.ingestion.store import Store
+from app.providers.base import NormalizedFixture
 from app.services.backtests import execute_backtest, load_backtest_matches
 from app.services.prediction import PredictionService
 from app.services.settlement import selection_profit, settle_asian, settle_finished
@@ -213,3 +214,17 @@ def test_database_trigger_blocks_raw_sql_updates(db):
     with pytest.raises(DBAPIError, match="immutable"):
         db.execute(text("UPDATE predictions SET classification = 'consider'"))
     db.rollback()
+
+
+def test_cup_fixture_is_predicted_from_its_feeder_league(db):
+    now = START + timedelta(days=365 * 2 + 20)
+    _seed(db, seasons=2)
+    cup = NormalizedFixture(provider="the_odds_api", provider_fixture_id="c1", competition_code="ENG-FAC",
+                            season_label="2026-2027", home_name="Synthetic Town 09", away_name="Synthetic Town 00",
+                            kickoff_utc=now + timedelta(days=2), status="scheduled", stage="cup")
+    Store(db).ingest_fixtures(make_batch([cup], provider="the_odds_api", trust=80))
+    db.commit()
+    summary = _predict(db, now)
+    assert summary["created"] == 1 and not summary["skipped"]
+    p = db.scalar(select(Prediction))
+    assert p.markets["1x2"]["home"] > p.markets["1x2"]["away"]  # team 09 is the strongest synthetic side

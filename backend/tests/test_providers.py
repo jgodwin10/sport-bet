@@ -6,12 +6,12 @@ from datetime import datetime, timezone
 import httpx
 import pytest
 
-from app.providers.api_football import parse_injuries, parse_lineups
+from app.providers.api_football import parse_fixtures, parse_injuries, parse_lineups
 from app.providers.base import ProviderError
 from app.providers.football_data_co_uk import parse_csv, season_code
 from app.providers.football_data_org import parse_matches
 from app.providers.http import ProviderHttpClient
-from app.providers.the_odds_api import parse_events
+from app.providers.the_odds_api import parse_events, parse_scores
 
 CSV = (
     "﻿Div,Date,Time,HomeTeam,AwayTeam,FTHG,FTAG,FTR,HTHG,HTAG,HS,AS,HST,AST,HxG,AxG,B365H,B365D,B365A,"
@@ -123,3 +123,25 @@ def test_http_client_gives_up_after_retries():
                                 transport=httpx.MockTransport(lambda r: httpx.Response(500)))
     with pytest.raises(ProviderError):
         client.get("https://example.test/y")
+
+
+def test_odds_api_scores_keep_only_completed_events():
+    payload = [
+        {"id": "s1", "commence_time": "2026-10-27T20:00:00Z", "completed": True, "home_team": "Alpha",
+         "away_team": "Beta", "scores": [{"name": "Beta", "score": "1"}, {"name": "Alpha", "score": "2"}]},
+        {"id": "s2", "commence_time": "2026-10-28T20:00:00Z", "completed": False, "home_team": "Gamma",
+         "away_team": "Delta", "scores": None},
+    ]
+    [f] = parse_scores(payload, "ENG-LC")
+    assert (f.status, f.home_goals, f.away_goals, f.stage) == ("finished", 2, 1, "cup")
+
+
+def test_api_football_cup_results_use_ninety_minute_score():
+    payload = {"response": [{
+        "fixture": {"id": 9, "date": "2024-09-17T19:00:00+00:00", "status": {"short": "PEN"}, "venue": {}},
+        "teams": {"home": {"name": "Alpha"}, "away": {"name": "Beta"}},
+        "score": {"halftime": {"home": 0, "away": 1}, "fulltime": {"home": 1, "away": 1},
+                  "extratime": {"home": 0, "away": 0}, "penalty": {"home": 4, "away": 3}},
+    }]}
+    [f] = parse_fixtures(payload, "UEFA-CL")
+    assert (f.status, f.home_goals, f.away_goals, f.ht_away_goals, f.stage) == ("finished", 1, 1, 1, "cup")

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.db.models import (
-    AvailabilityReport, DataConflict, Fixture, Lineup, ModelFeatureSnapshot, ModelVersion,
+    AvailabilityReport, Competition, DataConflict, Fixture, Lineup, ModelFeatureSnapshot, ModelVersion,
     Prediction, PredictionExplanation, Selection, Team,
 )
 from app.engine.decision import (
@@ -25,6 +25,7 @@ from app.engine.odds import asian_handicap_ev, implied_probability
 from app.engine.pipeline import (
     ModelSuite, SuiteConfig, combine_1x2, market_1x2, market_binary, rake_matrix, stat_disagreement,
 )
+from app.ingestion.competitions import COMPETITIONS, pool_codes
 from app.services.analytics import OddsView, head_to_head, load_records, odds_at, standings
 from app.services.explain import build_explanations
 from app.services.settings_store import get_rules, get_app_options
@@ -95,15 +96,22 @@ class PredictionService:
             by_comp.setdefault(f.competition_id, []).append(f)
         summary: dict = {"created": 0, "unchanged": 0, "failed": 0, "skipped": {}}
         deployed = deployed_version(self.db)
+        suites: dict[tuple[int, ...], tuple[ModelSuite, list]] = {}
         for comp_id, comp_fixtures in by_comp.items():
             # A model version's weights/validation only apply to competitions it was backtested on
             comp_code = comp_fixtures[0].competition.code
             version = deployed if deployed and comp_code in version_competitions(deployed) else None
-            records = load_records(self.db, comp_id, before=now)
-            suite = ModelSuite(suite_config(self.settings), pool=str(comp_id))
-            for r in records:
-                suite.absorb(r)
-            suite.refit(now)
+            # Cups train on their feeder leagues; competitions sharing a pool share one fit
+            pool = tuple(sorted(self.db.scalars(select(Competition.id).where(
+                Competition.code.in_(pool_codes(comp_code)))))) if comp_code in COMPETITIONS else (comp_id,)
+            if pool not in suites:
+                records = load_records(self.db, list(pool), before=now)
+                suite = ModelSuite(suite_config(self.settings), pool=",".join(map(str, pool)))
+                for r in records:
+                    suite.absorb(r)
+                suite.refit(now)
+                suites[pool] = (suite, records)
+            suite, records = suites[pool]
             if suite.dc is None and suite.elo_map is None and suite.feature_model is None:
                 # Without any statistical component the "prediction" would just echo the market.
                 summary["skipped"][comp_code] = (f"{len(comp_fixtures)} fixture(s): insufficient match history "
@@ -395,6 +403,8 @@ class PredictionService:
         return [f"{missing_results} recent match(es) in this competition have no stored result"] if missing_results else []
 
     def _context(self, fixture: Fixture, now: datetime) -> dict:
+        if fixture.competition.format == "cup":
+            return {}  # a cup has no league table
         table = standings(self.db, fixture.season_id, now)
         pos = {r["team_id"]: r for r in table}
         h, a = pos.get(fixture.home_team_id), pos.get(fixture.away_team_id)
