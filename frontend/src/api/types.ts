@@ -89,6 +89,26 @@ export const SelectionRow = z.object({
 });
 export type SelectionRow = z.infer<typeof SelectionRow>;
 
+export const TopPick = SelectionRow.extend({
+  rank: z.number(),
+  tier: z.enum(["recommended", "watchlist"]),
+  score: z.number(),
+  ai: z.object({
+    analysis_id: z.number(),
+    created_at: z.string(),
+    summary: z.string(),
+    confidence: z.string().nullable(),
+    probability: z.number().nullable(),
+    verdict: z.enum(["supports", "doubts"]).nullable(),
+    current: z.boolean(),
+  }).nullable(),
+});
+export type TopPick = z.infer<typeof TopPick>;
+export const TopPicks = z.object({
+  generated_at: z.string(), days: z.number(), ai_configured: z.boolean(), items: z.array(TopPick),
+});
+export type TopPicks = z.infer<typeof TopPicks>;
+
 export const LoginForm = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),

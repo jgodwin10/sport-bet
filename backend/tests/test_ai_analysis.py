@@ -18,6 +18,7 @@ from app.providers.gemini import GeminiClient, GeminiError, GeminiUnavailable, K
 from app.services import ai_analysis
 from app.services.ai_analysis import AiAnalysisService, normalise
 from app.services.prediction import PredictionService
+from app.services.top_picks import top_picks
 from tests.conftest import make_batch, synthetic_league
 
 ANSWER = {
@@ -272,3 +273,19 @@ def test_api_reports_unconfigured(db, monkeypatch):
     f = db.scalar(select(Fixture).limit(1))
     with TestClient(create_app()) as c:
         assert c.get(f"/api/v1/fixtures/{f.id}/ai-analysis").json()["configured"] is False
+
+
+def test_top_picks_get_ai_first_and_show_its_view(db, fake, monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, "gemini_auto_hours", 24 * 30)
+    monkeypatch.setattr(s, "gemini_auto_max_per_run", 1)
+    now = datetime.now(timezone.utc)
+    picks = top_picks(db, now)
+    assert picks
+    AiAnalysisService(db, s).analyse_upcoming(now=now)
+    analysed = db.scalar(select(AiAnalysis.fixture_id))
+    assert analysed == picks[0].fixture.id  # best pick first, not the soonest kickoff
+    ai = top_picks(db, now)[0].ai
+    assert ai["current"] is True and ai["summary"] == ANSWER["summary"]
+    if picks[0].selection.market == "1x2":
+        assert ai["verdict"] in {"supports", "doubts"} and 0 < ai["probability"] < 1

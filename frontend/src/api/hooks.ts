@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import { Competition, Fixture, pageOf, SelectionRow } from "./types";
+import { Competition, Fixture, pageOf, SelectionRow, TopPicks } from "./types";
 import type { AiAnalysis, AiAnalysisState, Analysis, Page } from "./types";
 import { z } from "zod";
 
@@ -44,6 +44,13 @@ export const usePredictions = (f: PredictionFilters) =>
   useQuery({
     queryKey: ["predictions", f],
     queryFn: () => api<Page<SelectionRow>>("/predictions", { query: f, schema: pageOf(SelectionRow) }),
+    ...LIVE,
+  });
+
+export const useTopPicks = (days: number) =>
+  useQuery({
+    queryKey: ["top-picks", days],
+    queryFn: () => api<TopPicks>("/predictions/top", { query: { days }, schema: TopPicks }),
     ...LIVE,
   });
 

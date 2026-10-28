@@ -7,9 +7,11 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.v1.serializers import prediction_detail, team_ref
+from app.core.config import get_settings
 from app.db.models import Competition, Fixture, Prediction, Selection, SettledSelection, Team
 from app.db.session import get_db
-from app.schemas.api import Page, SelectionRow
+from app.schemas.api import Page, SelectionRow, TopPickRow, TopPicks
+from app.services.top_picks import latest_prediction_ids, top_picks
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -17,10 +19,20 @@ SORTS = {"expected_value": Selection.expected_value, "edge": Selection.edge, "pr
          "kickoff": Fixture.kickoff_utc, "odds": Selection.decimal_odds, "predicted_at": Prediction.created_at}
 
 
-def latest_prediction_ids():
-    """Latest snapshot per fixture: predictions are only made before kickoff,
-    so this is also the final pre-match decision for settled fixtures."""
-    return select(func.max(Prediction.id)).group_by(Prediction.fixture_id).scalar_subquery()
+def selection_row(s: Selection, p: Prediction, f: Fixture, comp: str, home: Team, away: Team,
+                  st: SettledSelection | None, now: datetime) -> dict:
+    state = "settled" if st else ("upcoming" if f.kickoff_utc > now else "awaiting_result")
+    return dict(
+        selection_id=s.id, prediction_id=p.id, fixture_id=f.id, match=f"{home.name} v {away.name}",
+        home_team=team_ref(home), away_team=team_ref(away), competition=comp,
+        kickoff_utc=f.kickoff_utc, market=s.market, selection=s.selection, probability=s.probability,
+        probability_lower=s.probability_lower, odds=s.decimal_odds, bookmaker=s.bookmaker,
+        implied_probability=s.implied_probability, fair_probability=s.fair_probability, edge=s.edge,
+        expected_value=s.expected_value, qualifies=s.qualifies, rejection_reasons=s.rejection_reasons,
+        reliability_score=p.reliability["score"], reliability_label=p.reliability["label"],
+        odds_age_hours=p.data_quality.get("odds_age_hours"), predicted_at=p.created_at, status=state,
+        outcome=st.outcome if st else None, profit=st.profit if st else None, clv=st.clv if st else None,
+    )
 
 
 @router.get("", response_model=Page[SelectionRow])
@@ -71,21 +83,22 @@ def list_predictions(
     total = db.scalar(select(func.count()).select_from(q.subquery()))
     col = SORTS[sort]
     q = q.order_by(col.desc() if order == "desc" else col.asc(), Selection.id).offset((page - 1) * page_size).limit(page_size)
-    items = []
-    for s, p, f, comp, home, away, st in db.execute(q):
-        state = "settled" if st else ("upcoming" if f.kickoff_utc > now else "awaiting_result")
-        items.append(SelectionRow(
-            selection_id=s.id, prediction_id=p.id, fixture_id=f.id, match=f"{home.name} v {away.name}",
-            home_team=team_ref(home), away_team=team_ref(away), competition=comp,
-            kickoff_utc=f.kickoff_utc, market=s.market, selection=s.selection, probability=s.probability,
-            probability_lower=s.probability_lower, odds=s.decimal_odds, bookmaker=s.bookmaker,
-            implied_probability=s.implied_probability, fair_probability=s.fair_probability, edge=s.edge,
-            expected_value=s.expected_value, qualifies=s.qualifies, rejection_reasons=s.rejection_reasons,
-            reliability_score=p.reliability["score"], reliability_label=p.reliability["label"],
-            odds_age_hours=p.data_quality.get("odds_age_hours"), predicted_at=p.created_at, status=state,
-            outcome=st.outcome if st else None, profit=st.profit if st else None, clv=st.clv if st else None,
-        ))
+    items = [SelectionRow(**selection_row(s, p, f, comp, home, away, st, now))
+             for s, p, f, comp, home, away, st in db.execute(q)]
     return Page(items=items, total=total or 0, page=page, page_size=page_size)
+
+
+@router.get("/top", response_model=TopPicks)
+def list_top_picks(db: Session = Depends(get_db), limit: int = Query(10, ge=1, le=25),
+                   days: int = Query(7, ge=1, le=14)) -> TopPicks:
+    now = datetime.now(timezone.utc)
+    picks = top_picks(db, now, limit=limit, days=days)
+    return TopPicks(
+        generated_at=now, days=days, ai_configured=bool(get_settings().gemini_key_list),
+        items=[TopPickRow(**selection_row(t.selection, t.prediction, t.fixture, t.competition, t.home, t.away,
+                                          None, now), rank=i, tier=t.tier, score=t.score, ai=t.ai)
+               for i, t in enumerate(picks, 1)],
+    )
 
 
 @router.get("/{prediction_id}")

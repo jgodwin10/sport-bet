@@ -21,6 +21,7 @@ from app.core.config import Settings
 from app.db.models import AiAnalysis, Fixture, Prediction
 from app.providers.gemini import GeminiClient, GeminiError, GeminiUnavailable, get_gemini
 from app.services.analytics import head_to_head, standings, summarise_form, team_recent
+from app.services.top_picks import top_picks
 
 log = logging.getLogger(__name__)
 
@@ -238,7 +239,8 @@ class AiAnalysisService:
         return now - last.created_at >= timedelta(hours=self.settings.gemini_refresh_hours)
 
     def analyse_upcoming(self, now: datetime | None = None) -> dict:
-        """Scheduled run: fixtures kicking off soon whose analysis is missing or stale, soonest first."""
+        """Scheduled run: fixtures kicking off soon whose analysis is missing or stale. The current
+        top picks go first so the quota is spent where people look; the rest follow soonest first."""
         now = now or datetime.now(timezone.utc)
         s = self.settings
         summary: dict = {"analysed": 0, "failed": 0, "skipped": 0}
@@ -247,6 +249,8 @@ class AiAnalysisService:
         fixtures = list(self.db.scalars(select(Fixture).where(
             Fixture.status == "scheduled", Fixture.kickoff_utc > now,
             Fixture.kickoff_utc < now + timedelta(hours=s.gemini_auto_hours)).order_by(Fixture.kickoff_utc)))
+        rank = {t.fixture.id: i for i, t in enumerate(top_picks(self.db, now))}
+        fixtures.sort(key=lambda f: rank.get(f.id, len(rank)))  # stable: kickoff order within each group
         for f in fixtures:
             if summary["analysed"] + summary["failed"] >= s.gemini_auto_max_per_run:
                 break

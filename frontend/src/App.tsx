@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 // Chart-heavy pages are split out so the dashboard loads quickly.
 const MatchAnalysis = lazy(() => import("./pages/MatchAnalysis"));
 const Predictions = lazy(() => import("./pages/Predictions"));
+const TopPicks = lazy(() => import("./pages/TopPicks"));
 const Teams = lazy(() => import("./pages/Teams"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -20,6 +21,7 @@ export default function App() {
           <Route element={<Layout />}>
             <Route index element={<Dashboard />} />
             <Route path="match/:id" element={<MatchAnalysis />} />
+            <Route path="top" element={<TopPicks />} />
             <Route path="predictions" element={<Predictions />} />
             <Route path="teams" element={<Teams />} />
             <Route path="performance" element={<Performance />} />

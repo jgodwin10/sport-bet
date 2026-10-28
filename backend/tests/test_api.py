@@ -148,3 +148,22 @@ def test_rate_limit(db, monkeypatch):
     with TestClient(create_app()) as c:
         codes = [c.get("/api/v1/competitions").status_code for _ in range(5)]
     assert codes[:3] == [200, 200, 200] and codes[-1] == 429
+
+
+def test_top_picks_one_per_match_ranked(client):
+    r = client.get("/api/v1/predictions/top", params={"days": 14})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    items = body["items"]
+    assert items and len(items) <= 10
+    assert [i["rank"] for i in items] == list(range(1, len(items) + 1))
+    assert len({i["fixture_id"] for i in items}) == len(items)
+    assert all(i["expected_value"] > 0 and i["status"] == "upcoming" for i in items)
+    tiers = [i["tier"] for i in items]
+    assert tiers == sorted(tiers, key=lambda t: t != "recommended")
+    assert all((i["tier"] == "recommended") == i["qualifies"] for i in items)
+    for tier in ("recommended", "watchlist"):
+        scores = [i["score"] for i in items if i["tier"] == tier]
+        assert scores == sorted(scores, reverse=True)
+    assert client.get("/api/v1/predictions/top", params={"limit": 3}).json()["items"].__len__() <= 3
+    assert client.get("/api/v1/predictions/top", params={"limit": 100}).status_code == 422

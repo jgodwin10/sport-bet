@@ -129,6 +129,30 @@ class SelectionRow(BaseModel):
     clv: float | None
 
 
+class TopPickAi(BaseModel):
+    analysis_id: int
+    created_at: datetime
+    summary: str
+    confidence: str | None
+    probability: float | None  # the AI's own chance for this selection (1X2 only)
+    verdict: Literal["supports", "doubts"] | None
+    current: bool  # written for the prediction the pick comes from
+
+
+class TopPickRow(SelectionRow):
+    rank: int
+    tier: Literal["recommended", "watchlist"]
+    score: float
+    ai: TopPickAi | None
+
+
+class TopPicks(BaseModel):
+    generated_at: datetime
+    days: int
+    ai_configured: bool
+    items: list[TopPickRow]
+
+
 # ---------------------------------------------------------------- backtest
 class BacktestRequest(BaseModel):
     competitions: list[str] = Field(min_length=1, max_length=20)

@@ -8,6 +8,7 @@ import { cx } from "./ui";
 
 const NAV: { to: string; label: string; short: string; icon: IconName }[] = [
   { to: "/", label: "Matches", short: "Matches", icon: "dashboard" },
+  { to: "/top", label: "Top 10", short: "Top 10", icon: "star" },
   { to: "/predictions", label: "Value picks", short: "Picks", icon: "target" },
   { to: "/teams", label: "Teams", short: "Teams", icon: "shield" },
   { to: "/performance", label: "Track record", short: "Record", icon: "chart" },
@@ -99,7 +100,7 @@ export default function Layout() {
 
       {/* Mobile bottom tabs */}
       <nav aria-label="Main" className="lg:hidden fixed bottom-0 inset-x-0 z-30 px-3 pb-3 safe-bottom">
-        <div className="glass-strong grid grid-cols-5 rounded-[26px] p-1.5">
+        <div className="glass-strong grid grid-cols-6 rounded-[26px] p-1.5">
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === "/"}
               className={({ isActive }) => cx("relative flex flex-col items-center justify-center gap-1 h-[58px] rounded-[20px] text-[11px] font-semibold transition-all",

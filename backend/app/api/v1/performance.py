@@ -7,12 +7,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.v1.predictions import latest_prediction_ids
 from app.backtest.engine import bootstrap_roi_interval, max_drawdown
 from app.db.models import Backtest, Fixture, MatchResult, ModelVersion, Prediction, Selection, SettledSelection
 from app.db.session import get_db
 from app.engine.ensemble import brier, calibration_bins, log_loss
 from app.schemas.api import ModelVersionOut
+from app.services.top_picks import latest_prediction_ids
 
 router = APIRouter(tags=["performance"])
 
