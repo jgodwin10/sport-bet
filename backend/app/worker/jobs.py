@@ -68,9 +68,12 @@ def ingest_history(competitions: list[str] | None = None, seasons: int | None = 
     with exclusive(INGEST_LOCK) as acquired, session_factory()() as db:
         if not acquired:
             return SKIPPED
-        key = f"history:{','.join(competitions or s.competitions)}:{seasons or s.history_seasons}:" + (
+        comps = competitions or s.competitions
+        # The key column holds 200 chars and the competition list can be long, so it is hashed;
+        # params keep the readable list.
+        key = f"history:{zlib.crc32(','.join(comps).encode()):08x}:{seasons or s.history_seasons}:" + (
             datetime.now(timezone.utc).isoformat() if force else _bucket(24 * 60))
-        job = run_job(db, "history", key, {"competitions": competitions, "seasons": seasons},
+        job = run_job(db, "history", key, {"competitions": comps, "seasons": seasons or s.history_seasons},
                       lambda: IngestionService(db, get_providers(), s).history(competitions, seasons))
         return {"job_id": job.id, "status": job.status, "stats": job.stats}
 
