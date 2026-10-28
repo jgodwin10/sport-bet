@@ -146,6 +146,46 @@ class TopPickRow(SelectionRow):
     ai: TopPickAi | None
 
 
+class TopPickTally(BaseModel):
+    picks: int
+    settled: int
+    pending: int
+    won: int
+    lost: int
+    void: int
+    profit: float  # units, 1 unit staked per pick
+    roi: float | None
+
+
+class TopPickResult(BaseModel):
+    fixture_id: int
+    match: str
+    home_team: TeamRef
+    away_team: TeamRef
+    competition: str
+    kickoff_utc: datetime
+    market: str
+    selection: str
+    odds: float
+    probability: float
+    expected_value: float
+    rank: int
+    best_rank: int
+    tier: Literal["recommended", "watchlist"]
+    counted: bool  # still in the Top 10 at kickoff; dropped picks are not in the P&L
+    score: dict[str, int] | None
+    outcome: str | None
+    profit: float | None
+    clv: float | None
+    running_profit: float
+
+
+class TopPickRecord(BaseModel):
+    summary: dict[Literal["all", "recommended", "watchlist"], TopPickTally]
+    dropped: int
+    history: list[TopPickResult]
+
+
 class TopPicks(BaseModel):
     generated_at: datetime
     days: int

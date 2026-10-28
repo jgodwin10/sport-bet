@@ -25,6 +25,7 @@ from app.services.ai_analysis import AiAnalysisService
 from app.services.backtests import execute_backtest
 from app.services.prediction import PredictionService
 from app.services.settlement import settle_finished
+from app.services.top_picks import record_top_picks
 
 log = logging.getLogger(__name__)
 
@@ -128,7 +129,14 @@ def refresh_team_news() -> dict:
 
 def run_predictions(trigger: str = "scheduled", fixture_ids: list[int] | None = None) -> dict:
     with session_factory()() as db:
-        return PredictionService(db, get_settings()).predict_upcoming(trigger, fixture_ids=fixture_ids)
+        out = PredictionService(db, get_settings()).predict_upcoming(trigger, fixture_ids=fixture_ids)
+        try:
+            out["top_picks"] = record_top_picks(db, datetime.now(timezone.utc))
+        except Exception:  # noqa: BLE001 - tracking must not fail the predictions themselves
+            db.rollback()
+            log.exception("recording the top picks failed")
+            out["top_picks"] = "failed"
+        return out
 
 
 def ai_analysis(fixture_ids: list[int] | None = None) -> dict:

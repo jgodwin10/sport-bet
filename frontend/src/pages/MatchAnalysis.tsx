@@ -5,6 +5,7 @@ import { getToken } from "../api/client";
 import { useAdminAction, useAiAnalysis, useAnalysis, useGenerateAiAnalysis, useMe } from "../api/hooks";
 import type { AiAnalysisContent, Analysis, FormSummary, PredictionDetail, PredictionSelection, RecentMatch } from "../api/types";
 import { Icon, type IconName } from "../components/icons";
+import Lineups from "../components/Lineups";
 import {
   AXIS, Card, ChartTooltip, ClassificationBadge, cx, Disclosure, Empty, ErrorState, FormPills, Freshness, InfoTip,
   KeyValue, Loading, OUTCOME_COLORS, OutcomeBar, Pill, ReliabilityBadge, Segmented, SERIES, StatTile, TeamLogo,
@@ -14,6 +15,7 @@ import { bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plai
 
 const TABS = [
   { value: "summary", label: "Summary" },
+  { value: "lineups", label: "Lineups" },
   { value: "stats", label: "Stats" },
   { value: "odds", label: "Odds" },
   { value: "details", label: "Details" },
@@ -43,6 +45,7 @@ export default function MatchAnalysis() {
       </div>
       <div className="space-y-6 animate-fade-up" key={tab}>
         {tab === "summary" && (p ? <Summary a={a} p={p} /> : <NoPrediction />)}
+        {tab === "lineups" && <Lineups a={a} />}
         {tab === "stats" && <Stats a={a} />}
         {tab === "odds" && (p ? <OddsValue a={a} p={p} /> : <NoPrediction />)}
         {tab === "details" && <Details a={a} />}

@@ -109,6 +109,27 @@ export const TopPicks = z.object({
 });
 export type TopPicks = z.infer<typeof TopPicks>;
 
+const TopPickTally = z.object({
+  picks: z.number(), settled: z.number(), pending: z.number(), won: z.number(), lost: z.number(),
+  void: z.number(), profit: z.number(), roi: z.number().nullable(),
+});
+export type TopPickTally = z.infer<typeof TopPickTally>;
+export const TopPickResult = z.object({
+  fixture_id: z.number(), match: z.string(), home_team: TeamRef.optional(), away_team: TeamRef.optional(),
+  competition: z.string(), kickoff_utc: z.string(), market: z.string(), selection: z.string(), odds: z.number(),
+  probability: z.number(), expected_value: z.number(), rank: z.number(), best_rank: z.number(),
+  tier: z.enum(["recommended", "watchlist"]), counted: z.boolean(),
+  score: z.object({ home: z.number(), away: z.number() }).nullable(),
+  outcome: z.string().nullable(), profit: z.number().nullable(), clv: z.number().nullable(), running_profit: z.number(),
+});
+export type TopPickResult = z.infer<typeof TopPickResult>;
+export const TopPickRecord = z.object({
+  summary: z.object({ all: TopPickTally, recommended: TopPickTally, watchlist: TopPickTally }),
+  dropped: z.number(),
+  history: z.array(TopPickResult),
+});
+export type TopPickRecord = z.infer<typeof TopPickRecord>;
+
 export const LoginForm = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),
@@ -182,7 +203,7 @@ export interface Analysis {
     teams: number };
   availability: { team: string; player: string; kind: string; reason: string | null; verification: string;
     source: string; retrieved_at: string }[];
-  lineups: { team: string; status: string; formation: string | null;
+  lineups: { team_id: number; team: string; status: string; formation: string | null;
     players: { name: string; number?: number; position?: string; starter: boolean }[]; source: string;
     retrieved_at: string }[];
   odds: { latest: OddsRow[]; latest_observed: string | null; age_hours: number | null; closing: OddsRow[] };
@@ -190,6 +211,10 @@ export interface Analysis {
   sources: { id: number; provider: string; resource: string; retrieved_at: string; trust_level: number;
     verification: string }[];
   disclaimer: string;
+}
+
+export interface PredictedLineup {
+  formation: string | null; source: string; players: { name: string; position: "GK" | "DF" | "MF" | "FW" | null }[];
 }
 
 export interface AiAnalysisContent {
@@ -202,6 +227,7 @@ export interface AiAnalysisContent {
   model_assessment: string;
   probability_view: OneXTwo | null;
   confidence: "low" | "medium" | "high";
+  predicted_lineups?: { home: PredictedLineup | null; away: PredictedLineup | null } | null;
   basis?: { prediction_id: number; lineup_status: string; model_1x2: OneXTwo | null };
 }
 

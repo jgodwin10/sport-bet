@@ -8,10 +8,12 @@ from sqlalchemy import select
 
 from app.core.config import get_settings
 from app.core.security import hash_password
-from app.db.models import Selection, User
+from app.db.models import Fixture, MatchResult, Selection, TopPickEntry, User
 from app.ingestion.store import Store
 from app.main import create_app
 from app.services.prediction import PredictionService
+from app.services.settlement import settle_finished
+from app.services.top_picks import record_top_picks
 from tests.conftest import make_batch, synthetic_league
 
 START = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=365 * 2 + 20)
@@ -167,3 +169,43 @@ def test_top_picks_one_per_match_ranked(client):
         assert scores == sorted(scores, reverse=True)
     assert client.get("/api/v1/predictions/top", params={"limit": 3}).json()["items"].__len__() <= 3
     assert client.get("/api/v1/predictions/top", params={"limit": 100}).status_code == 422
+
+
+def test_top_picks_are_recorded_frozen_at_kickoff_and_settled(client, db):
+    now = datetime.now(timezone.utc)
+    assert record_top_picks(db, now)["listed"] > 2
+    entries = db.scalars(select(TopPickEntry).order_by(TopPickEntry.rank)).all()
+    played, dropped = entries[:2], entries[2]
+
+    # one match is postponed before kickoff: it leaves the list on the next recording
+    dropped_fx = db.get(Fixture, dropped.fixture_id)
+    dropped_fx.status = "postponed"
+    db.commit()
+    record_top_picks(db, now)
+    assert dropped.in_list is False
+
+    # two listed matches are played: kickoff passes, results arrive, settlement runs
+    for e in played:
+        f = db.get(Fixture, e.fixture_id)
+        f.kickoff_utc, f.status = now - timedelta(hours=3), "finished"
+        db.add(MatchResult(fixture_id=f.id, home_goals=2, away_goals=1))
+    dropped_fx.kickoff_utc = now - timedelta(hours=3)
+    db.commit()
+    settle_finished(db)
+    frozen = {e.fixture_id: (e.selection_id, e.recorded_at) for e in played}
+    record_top_picks(db, now + timedelta(minutes=5))
+    assert {e.fixture_id: (e.selection_id, e.recorded_at) for e in played} == frozen
+
+    r = client.get("/api/v1/predictions/top/record")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    total = body["summary"]["all"]
+    assert total["picks"] == total["settled"] == 2 and total["pending"] == 0
+    assert total["won"] + total["lost"] + total["void"] == 2
+    history = {h["fixture_id"]: h for h in body["history"]}
+    assert history[dropped.fixture_id]["counted"] is False and body["dropped"] == 1
+    profits = [history[e.fixture_id]["profit"] for e in played]
+    assert total["profit"] == pytest.approx(sum(profits)) and total["roi"] == pytest.approx(sum(profits) / 2)
+    assert body["history"][0]["running_profit"] == pytest.approx(total["profit"])  # newest first
+    by_tier = body["summary"]["recommended"]["picks"] + body["summary"]["watchlist"]["picks"]
+    assert by_tier == 2

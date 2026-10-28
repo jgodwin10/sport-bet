@@ -1,10 +1,11 @@
 """Google Gemini client with a rotating pool of API keys.
 
-Requests start from the next key in round-robin order. A key that is rate-limited
-(429), rejected (invalid/forbidden) or hits a server error is put on cooldown and
-the request moves on to the next key, so one exhausted key does not stop analysis.
-Models are tried in order: a model the API does not know (404) falls through to
-the next one. Keys travel only in the `x-goog-api-key` header and are never logged
+Requests start from the next key in round-robin order. A key that is rejected
+(invalid/forbidden) or unreachable is put on cooldown for every model; a rate limit
+(429) or server error only cools that key for that model, since Gemini quotas are per
+model. The request moves on to the next key, and when no key can serve a model, to the
+next model, so an exhausted preview model falls back to the stable one. A model the API
+does not know (404) falls through to the next one. Keys travel only in the `x-goog-api-key` header and are never logged
 or included in error messages; the pool refers to them by slot number.
 """
 
@@ -40,7 +41,8 @@ class GeminiUnavailable(GeminiError):
 class KeyPool:
     def __init__(self, keys: list[str], clock=time.monotonic) -> None:
         self._keys = list(dict.fromkeys(keys))
-        self._until = [0.0] * len(self._keys)
+        self._until = [0.0] * len(self._keys)  # whole key
+        self._model_until: dict[tuple[int, str], float] = {}  # one key for one model
         self._reason: list[str | None] = [None] * len(self._keys)
         self._next = 0
         self._clock = clock
@@ -49,34 +51,49 @@ class KeyPool:
     def __len__(self) -> int:
         return len(self._keys)
 
-    def order(self) -> list[tuple[int, str]]:
-        """Usable (slot, key) pairs, starting from the next key in rotation."""
+    def order(self, model: str | None = None, advance: bool = True) -> list[tuple[int, str]]:
+        """Usable (slot, key) pairs for `model`, starting from the next key in rotation."""
         with self._lock:
             n = len(self._keys)
             if not n:
                 return []
-            start = self._next
-            self._next = (self._next + 1) % n
+            start = self._next if advance else (self._next - 1) % n
+            if advance:
+                self._next = (self._next + 1) % n
             now = self._clock()
             slots = [(start + i) % n for i in range(n)]
-            return [(s, self._keys[s]) for s in slots if self._until[s] <= now]
+            return [(s, self._keys[s]) for s in slots
+                    if self._until[s] <= now and self._model_until.get((s, model or ""), 0.0) <= now]
 
-    def penalise(self, slot: int, seconds: float, reason: str) -> None:
+    def penalise(self, slot: int, seconds: float, reason: str, model: str | None = None) -> None:
         with self._lock:
-            self._until[slot] = max(self._until[slot], self._clock() + seconds)
-            self._reason[slot] = reason
-        log.warning("gemini key #%d cooling down for %.0fs: %s", slot + 1, seconds, reason)
+            if model:
+                key = (slot, model)
+                self._model_until[key] = max(self._model_until.get(key, 0.0), self._clock() + seconds)
+            else:
+                self._until[slot] = max(self._until[slot], self._clock() + seconds)
+            self._reason[slot] = f"{model}: {reason}" if model else reason
+        log.warning("gemini key #%d cooling down for %.0fs%s: %s", slot + 1, seconds,
+                    f" on {model}" if model else "", reason)
 
     def succeeded(self, slot: int) -> None:
         with self._lock:
             self._reason[slot] = None
 
-    def status(self) -> list[dict]:
+    def status(self, models: list[str] | None = None) -> list[dict]:
+        """Per key: `available` when it can serve at least one of `models` right now."""
         now = self._clock()
+        out = []
         with self._lock:
-            return [{"slot": i + 1, "available": self._until[i] <= now,
-                     "retry_in_seconds": max(0, round(self._until[i] - now)),
-                     "last_problem": self._reason[i]} for i in range(len(self._keys))]
+            for i in range(len(self._keys)):
+                cooling = {m: round(self._model_until[(i, m)] - now) for m in models or []
+                           if self._model_until.get((i, m), 0.0) > now}
+                wait = max(0.0, self._until[i] - now)
+                if models and len(cooling) == len(models):
+                    wait = max(wait, min(cooling.values()))
+                out.append({"slot": i + 1, "available": wait == 0, "retry_in_seconds": round(wait),
+                            "cooling_models": cooling, "last_problem": self._reason[i]})
+        return out
 
 
 @dataclass
@@ -108,7 +125,7 @@ class GeminiClient:
         return len(self.pool) > 0 and bool(self.models)
 
     def status(self) -> dict:
-        return {"configured": self.configured, "models": self.models, "keys": self.pool.status()}
+        return {"configured": self.configured, "models": self.models, "keys": self.pool.status(self.models)}
 
     def generate(self, prompt: str, *, system: str | None = None, search: bool = True,
                  temperature: float = 0.3) -> GeminiResult:
@@ -122,18 +139,15 @@ class GeminiClient:
             body["tools"] = [{"google_search": {}}]
 
         problems: list[str] = []
-        for model in self.models:
-            candidates = self.pool.order()
-            if not candidates:
-                break
-            for slot, key in candidates:
+        for i, model in enumerate(self.models):
+            for slot, key in self.pool.order(model, advance=i == 0):
                 outcome = self._attempt(model, slot, key, body)
                 if isinstance(outcome, GeminiResult):
                     return outcome
                 problems.append(f"{model} key #{slot + 1}: {outcome}")
                 if outcome == "model unavailable":
                     break  # same answer for every key: try the next model
-        cooling = sum(not k["available"] for k in self.pool.status())
+        cooling = sum(not k["available"] for k in self.pool.status(self.models))
         raise GeminiUnavailable(
             f"no Gemini key could serve the request ({cooling}/{len(self.pool)} keys cooling down)"
             + (f"; last problems: {'; '.join(problems[-3:])}" if problems else ""))
@@ -159,7 +173,7 @@ class GeminiClient:
         if resp.status_code == 429:
             daily = "PerDay" in text_blob or "per day" in text_blob.lower()
             delay = DAILY_QUOTA_COOLDOWN if daily else (_retry_delay(data) or RATE_LIMIT_COOLDOWN)
-            self.pool.penalise(slot, delay, "daily quota exhausted" if daily else "rate limited")
+            self.pool.penalise(slot, delay, "daily quota exhausted" if daily else "rate limited", model)
             return "rate limited"
         if resp.status_code in (401, 403) or "API_KEY_INVALID" in text_blob or "API key not valid" in message:
             self.pool.penalise(slot, REJECTED_KEY_COOLDOWN, f"key rejected (HTTP {resp.status_code})")
@@ -167,7 +181,7 @@ class GeminiClient:
         if resp.status_code == 404:
             return "model unavailable"
         if resp.status_code >= 500:
-            self.pool.penalise(slot, SERVER_ERROR_COOLDOWN, f"server error (HTTP {resp.status_code})")
+            self.pool.penalise(slot, SERVER_ERROR_COOLDOWN, f"server error (HTTP {resp.status_code})", model)
             return f"server error {resp.status_code}"
         # Any other 4xx is a problem with the request, which another key would not fix.
         raise GeminiError(f"Gemini rejected the request (HTTP {resp.status_code}): {message[:200]}")

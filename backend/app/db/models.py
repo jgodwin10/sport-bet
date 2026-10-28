@@ -454,6 +454,28 @@ class AiAnalysis(Base):
     error: Mapped[str | None] = mapped_column(Text)
 
 
+class TopPickEntry(Base):
+    """A match that appeared in the Top 10, for tracking the list's results.
+
+    Updated on every recording until kickoff, then frozen: it keeps the selection (and so the
+    odds) from the last time the match was listed. `in_list` says whether the match was still
+    in the Top 10 at the last recording before kickoff; only those count towards P&L.
+    """
+
+    __tablename__ = "top_pick_entries"
+    fixture_id: Mapped[int] = mapped_column(ForeignKey("fixtures.id"), primary_key=True)
+    selection_id: Mapped[int] = mapped_column(ForeignKey("selections.id"))
+    rank: Mapped[int] = mapped_column(Integer)  # rank at the last listing
+    best_rank: Mapped[int] = mapped_column(Integer)
+    tier: Mapped[str] = mapped_column(String(20))  # recommended|watchlist at the last listing
+    in_list: Mapped[bool] = mapped_column(Boolean)
+    first_listed_at: Mapped[datetime] = mapped_column()
+    last_listed_at: Mapped[datetime] = mapped_column()
+    recorded_at: Mapped[datetime] = mapped_column()  # last recording that saw this fixture before kickoff
+
+    selection: Mapped[Selection] = relationship()
+
+
 # --------------------------------------------------------------- backtests
 class Backtest(Base):
     __tablename__ = "backtests"

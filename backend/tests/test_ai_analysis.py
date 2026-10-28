@@ -77,15 +77,16 @@ def test_rate_limited_key_fails_over_to_next_key_and_cools_down():
     assert r.text == "hello" and r.key_slot == 2 and r.model == "model-new"
     assert r.sources == [{"title": "Example news", "uri": "https://news.example/a"}]
     assert r.search_queries == ["synthetic town injuries"]
-    status = c.pool.status()
-    assert status[0]["available"] is False and status[0]["retry_in_seconds"] == 37
+    status = c.pool.status(c.models)
+    assert status[0]["cooling_models"] == {"model-new": 37}
+    assert status[0]["available"] is True  # model-old can still use it
     # next request starts after the cooling key and never touches it
     seen.clear()
     c.generate("prompt")
     c.generate("prompt")
     assert "key-aaa" not in seen
     clock.t += 40
-    assert c.pool.status()[0]["available"] is True
+    assert c.pool.status(c.models)[0]["cooling_models"] == {}
 
 
 def test_daily_quota_and_invalid_key_get_long_cooldowns():
@@ -101,9 +102,22 @@ def test_daily_quota_and_invalid_key_get_long_cooldowns():
 
     c = client_with(handler)
     assert c.generate("p").key_slot == 3
-    s = c.pool.status()
-    assert s[0]["retry_in_seconds"] == 3600 and s[0]["last_problem"] == "daily quota exhausted"
+    s = c.pool.status(c.models)
+    assert s[0]["cooling_models"] == {"model-new": 3600} and s[0]["last_problem"] == "model-new: daily quota exhausted"
     assert s[1]["retry_in_seconds"] == 6 * 3600 and "rejected" in s[1]["last_problem"]
+
+
+def test_rate_limited_model_on_every_key_falls_back_to_next_model():
+    def handler(req: httpx.Request) -> httpx.Response:
+        if "model-new" in req.url.path:
+            return httpx.Response(429, json={"error": {"code": 429, "status": "RESOURCE_EXHAUSTED"}})
+        return httpx.Response(200, json=ok_body("from old"))
+
+    c = client_with(handler)
+    r = c.generate("p")
+    assert r.model == "model-old" and r.text == "from old"
+    assert all(k["available"] and k["cooling_models"] == {"model-new": 60} for k in c.pool.status(c.models))
+    assert c.generate("p").model == "model-old"  # cooling model skipped without a request
 
 
 def test_unknown_model_falls_back_to_next_model():
@@ -180,6 +194,22 @@ def test_normalise_validates_and_rescales():
     assert junk["probability_view"] is None
     assert normalise(json.dumps({**ANSWER, "probability_view": {"home": 0.9, "draw": 0.9, "away": 0.9}}))[
         "probability_view"] is None
+    assert out["predicted_lineups"] is None and junk["predicted_lineups"] is None
+
+
+def test_normalise_predicted_lineups():
+    xi = [{"name": "Keeper", "position": "gk"}] + [{"name": f"Player {i}", "position": "DF" if i < 4 else "XX"}
+                                                    for i in range(10)] + [{"name": "Twelfth"}, {"position": "FW"}]
+    out = normalise(json.dumps({**ANSWER, "predicted_lineups": {
+        "home": {"formation": "4-2-3-1", "source": "Club preview, 27 Oct", "players": xi},
+        "away": {"formation": "the usual", "players": []}}}))
+    home = out["predicted_lineups"]["home"]
+    assert home["formation"] == "4-2-3-1" and home["source"] == "Club preview, 27 Oct"
+    assert len(home["players"]) == 11 and home["players"][0] == {"name": "Keeper", "position": "GK"}
+    assert home["players"][5]["position"] is None  # unknown position dropped, player kept
+    assert out["predicted_lineups"]["away"] is None  # no players -> no lineup
+    lone = normalise(json.dumps({**ANSWER, "predicted_lineups": {"home": {"formation": "W-M", "players": xi[:3]}}}))
+    assert lone["predicted_lineups"]["home"]["formation"] is None
 
 
 # ------------------------------------------------------------------ service + API

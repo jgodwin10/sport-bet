@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
+import { lines } from "../components/Lineups";
 import { MatchRow } from "../components/MatchRow";
 import { Segmented, Sheet, TeamLogo } from "../components/ui";
 import { friendlyReason, plainFacts, selectionLabel } from "../lib/language";
@@ -84,5 +85,24 @@ describe("plain language", () => {
     expect(facts[0].text).toBe("We expect about 1.5 goals from Alpha and 1.0 from Beta.");
     expect(facts[1].text).toContain("20% stronger than the league average");
     expect(facts[2].text).toContain("almost exactly as we do");
+  });
+});
+
+describe("lineup lines", () => {
+  const xi = (positions: (string | null)[]) => positions.map((position, i) => ({ name: `P${i}`, position }));
+
+  it("splits starters by the formation, goalkeeper first", () => {
+    const rows = lines(xi(Array(11).fill(null)), "4-2-3-1")!;
+    expect(rows.map((r) => r.length)).toEqual([1, 4, 2, 3, 1]);
+    expect(rows[0][0].name).toBe("P0");
+  });
+
+  it("falls back to positions when the formation does not add up", () => {
+    const rows = lines(xi(["G", "D", "D", "D", "M", "M", "F"]), "4-4-2")!;
+    expect(rows.map((r) => r.length)).toEqual([1, 3, 2, 1]);
+  });
+
+  it("gives up when neither the formation nor positions are usable", () => {
+    expect(lines(xi([null, "DF"]), null)).toBeNull();
   });
 });

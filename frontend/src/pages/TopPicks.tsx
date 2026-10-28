@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useTopPicks } from "../api/hooks";
-import type { TopPick } from "../api/types";
+import { useTopPickRecord, useTopPicks } from "../api/hooks";
+import type { TopPick, TopPickRecord, TopPickResult, TopPickTally } from "../api/types";
 import { Icon } from "../components/icons";
 import {
-  Card, cx, Empty, ErrorState, Freshness, InfoTip, Loading, PageHeader, Pill, ReliabilityBadge, Segmented, TeamLogo,
+  Card, cx, Empty, ErrorState, Freshness, InfoTip, Loading, PageHeader, Pill, ReliabilityBadge, Segmented, StatTile, TeamLogo,
 } from "../components/ui";
 import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { friendlyReason, GLOSSARY, selectionLabel } from "../lib/language";
@@ -15,9 +15,26 @@ const WINDOWS = [
   { value: "14", label: "Next 14 days" },
 ];
 
+const TRACKING = "Every match in the Top 10 at kickoff counts, staked 1 unit at the odds shown when it was last listed. Picks that dropped out before kickoff are shown but not counted.";
+
 const RANKING = "Each match's best-priced bet, ranked by its value at the cautious end of our estimate and scaled by data reliability. Bets that pass every safety check come first.";
 
 export default function TopPicks() {
+  const [view, setView] = useState("upcoming");
+  return (
+    <>
+      <PageHeader eyebrow="Ranked by the model" title="Top 10 picks"
+                  description={view === "upcoming"
+                    ? <>The strongest bet in each upcoming match, best first, with the AI's read on the team news. <InfoTip text={RANKING} /></>
+                    : <>How the Top 10 has done, at 1 unit per pick. <InfoTip text={TRACKING} /></>}
+                  actions={<Segmented label="View" value={view} onChange={setView}
+                                      options={[{ value: "upcoming", label: "Upcoming" }, { value: "results", label: "Results" }]} />} />
+      {view === "upcoming" ? <Upcoming /> : <Results />}
+    </>
+  );
+}
+
+function Upcoming() {
   const [days, setDays] = useState("7");
   const q = useTopPicks(Number(days));
   const items = q.data?.items ?? [];
@@ -25,9 +42,7 @@ export default function TopPicks() {
 
   return (
     <>
-      <PageHeader eyebrow="Ranked by the model" title="Top 10 picks"
-                  description={<>The strongest bet in each upcoming match, best first, with the AI's read on the team news. <InfoTip text={RANKING} /></>}
-                  actions={<Segmented label="Window" value={days} onChange={setDays} options={WINDOWS} />} />
+      <Segmented variant="chips" label="Window" value={days} onChange={setDays} options={WINDOWS} className="mb-4" />
 
       {q.isLoading ? <Card><Loading rows={6} /></Card>
         : q.isError ? <ErrorState error={q.error} onRetry={q.refetch} />
@@ -137,6 +152,93 @@ function AiRead({ t, configured }: { t: TopPick; configured: boolean }) {
       </div>
       <p className="mt-1.5 text-[13px] text-ink-2 leading-relaxed line-clamp-3">{ai.summary}</p>
     </div>
+  );
+}
+
+function Results() {
+  const q = useTopPickRecord();
+  if (q.isLoading) return <Card><Loading rows={6} /></Card>;
+  if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
+  const rec = q.data as TopPickRecord;
+  if (!rec.history.length) {
+    return (
+      <Card>
+        <Empty title="No results yet" icon="clock">
+          The Top 10 is recorded every time predictions update. Results appear here once those matches have been played.
+        </Empty>
+      </Card>
+    );
+  }
+  const all = rec.summary.all;
+  return (
+    <>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <StatTile label="Profit" value={units(all.profit)} tone={all.profit > 0 ? "pos" : all.profit < 0 ? "neg" : undefined}
+                  hint={`from ${all.settled} settled pick${all.settled === 1 ? "" : "s"}`} />
+        <StatTile label="Return per pick" value={all.roi === null ? "—" : signedPct(all.roi)}
+                  tone={all.roi === null ? undefined : all.roi > 0 ? "pos" : all.roi < 0 ? "neg" : undefined} hint="ROI at 1 unit each" />
+        <StatTile label="Won · lost" value={`${all.won} · ${all.lost}`} hint={all.void ? `${all.void} void or push` : undefined} />
+        <StatTile label="Awaiting result" value={all.pending} hint={rec.dropped ? `${rec.dropped} dropped before kickoff, not counted` : undefined} />
+      </div>
+
+      {all.settled > 0 && all.settled < 50 && (
+        <p className="mt-3 flex items-start gap-2 text-[13px] text-ink-3 leading-relaxed">
+          <Icon name="info" size={15} className="mt-0.5 shrink-0" />
+          {all.settled} results is a small sample: profit this early is mostly luck, in either direction.
+        </p>
+      )}
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <TierLine label="Recommended" tone="pos" t={rec.summary.recommended} />
+        <TierLine label="Watchlist" tone="warn" t={rec.summary.watchlist} />
+      </div>
+
+      <Card title="Pick history" subtitle="Newest first" className="mt-6" flush>
+        <ul className="divide-y divide-white/[0.06]">
+          {rec.history.map((h) => <ResultRow key={h.fixture_id} h={h} />)}
+        </ul>
+      </Card>
+    </>
+  );
+}
+
+const units = (x: number) => `${x > 0 ? "+" : ""}${x.toFixed(2)}u`;
+
+function TierLine({ label, tone, t }: { label: string; tone: "pos" | "warn"; t: TopPickTally }) {
+  return (
+    <div className="card flex items-center justify-between gap-3 px-4 py-3">
+      <Pill tone={tone}>{label}</Pill>
+      <span className="text-[13px] text-ink-3 num">
+        {t.settled ? <>{t.won}–{t.lost} · <span className={cx("font-bold", t.profit > 0 ? "text-pos" : t.profit < 0 ? "text-neg" : "text-ink")}>{units(t.profit)}</span></>
+          : "no results yet"}
+        {t.pending > 0 && ` · ${t.pending} pending`}
+      </span>
+    </div>
+  );
+}
+
+function ResultRow({ h }: { h: TopPickResult }) {
+  const home = h.home_team?.name, away = h.away_team?.name;
+  const win = h.outcome === "win" || h.outcome === "half_win", loss = h.outcome === "loss" || h.outcome === "half_loss";
+  return (
+    <li>
+      <Link to={`/match/${h.fixture_id}`} className={cx("flex items-center gap-3 px-4 sm:px-6 py-3 hover:bg-white/[0.04] transition-colors", !h.counted && "opacity-60")}>
+        <span className="num grid place-items-center h-8 w-8 shrink-0 rounded-lg bg-white/[0.06] text-[13px] font-bold text-ink-2">{h.rank}</span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13.5px] font-semibold">{selectionLabel(h.market, h.selection, home, away)} <span className="num text-ink-3">@ {odds(h.odds)}</span></div>
+          <div className="truncate text-2xs text-ink-4">
+            {h.match}{h.score && <span className="num"> · {h.score.home}–{h.score.away}</span>} · {fmtDateTime(h.kickoff_utc)}
+            {!h.counted && " · dropped before kickoff"}
+          </div>
+        </div>
+        <div className="text-right shrink-0">
+          {h.outcome
+            ? <Pill tone={win ? "pos" : loss ? "neg" : "neutral"}>{h.outcome.replace("_", " ")}{h.counted && h.profit !== null && ` · ${units(h.profit)}`}</Pill>
+            : <Pill icon="clock">pending</Pill>}
+          {h.counted && <div className="mt-1 text-2xs text-ink-4 num">total {units(h.running_profit)}</div>}
+        </div>
+      </Link>
+    </li>
   );
 }
 

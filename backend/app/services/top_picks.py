@@ -6,6 +6,10 @@ reliability, so a big edge on thin data does not outrank a solid one. Selections
 every rule come first; the list is topped up with positive-value selections that failed a
 check, which are labelled as such.
 
+Each prediction run records the list (`record_top_picks`) so its results can be tracked: a
+match's entry follows the list until kickoff and is then frozen, and `track_record` reports
+level-stakes P&L from the settled selections.
+
 The AI analysis is attached for reading only: whether its own 1X2 view still sees value at
 the offered odds. It does not move a pick, for the reasons in app.services.ai_analysis.
 """
@@ -18,7 +22,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
-from app.db.models import AiAnalysis, Competition, Fixture, Prediction, Selection, Team
+from app.db.models import AiAnalysis, Competition, Fixture, Prediction, Selection, SettledSelection, Team, TopPickEntry
 
 
 def latest_prediction_ids():
@@ -87,3 +91,63 @@ def top_picks(db: Session, now: datetime, limit: int = 10, days: int = 7) -> lis
         if a := analyses.get(t.fixture.id):
             t.ai = ai_view(a, t.selection, t.prediction.id)
     return picks
+
+
+def record_top_picks(db: Session, now: datetime) -> dict:
+    """Store the current Top 10. Entries of matches that have kicked off are left untouched."""
+    picks = top_picks(db, now)
+    open_entries = {e.fixture_id: e for e in db.scalars(
+        select(TopPickEntry).join(Fixture, Fixture.id == TopPickEntry.fixture_id).where(Fixture.kickoff_utc > now))}
+    listed = set()
+    for rank, t in enumerate(picks, 1):
+        fid = t.fixture.id
+        listed.add(fid)
+        e = open_entries.get(fid)
+        if e is None:
+            e = TopPickEntry(fixture_id=fid, best_rank=rank, first_listed_at=now)
+            db.add(e)
+        e.selection_id, e.rank, e.tier, e.in_list = t.selection.id, rank, t.tier, True
+        e.best_rank, e.last_listed_at, e.recorded_at = min(e.best_rank, rank), now, now
+    for fid, e in open_entries.items():
+        if fid not in listed:
+            e.in_list, e.recorded_at = False, now
+    db.commit()
+    return {"listed": len(listed), "new": len(listed - open_entries.keys()),
+            "dropped": len(open_entries.keys() - listed)}
+
+
+def _tally(rows: list[tuple]) -> dict:
+    settled = [st for _, _, st in rows if st is not None]
+    profit = sum(st.profit for st in settled)
+    return {"picks": len(rows), "settled": len(settled), "pending": len(rows) - len(settled),
+            "won": sum(st.outcome in ("win", "half_win") for st in settled),
+            "lost": sum(st.outcome in ("loss", "half_loss") for st in settled),
+            "void": sum(st.outcome in ("push", "void") for st in settled),
+            "profit": round(profit, 4), "roi": round(profit / len(settled), 4) if settled else None}
+
+
+def track_record(db: Session, now: datetime, limit: int = 100) -> dict:
+    """Level-stakes (1 unit) results of every match that was in the Top 10 at kickoff."""
+    ht, at = aliased(Team), aliased(Team)
+    rows = list(db.execute(
+        select(TopPickEntry, Selection, Fixture, Competition.code, ht, at, SettledSelection)
+        .join(Selection, Selection.id == TopPickEntry.selection_id)
+        .join(Fixture, Fixture.id == TopPickEntry.fixture_id)
+        .join(Competition, Competition.id == Fixture.competition_id)
+        .join(ht, ht.id == Fixture.home_team_id).join(at, at.id == Fixture.away_team_id)
+        .outerjoin(SettledSelection, SettledSelection.selection_id == Selection.id)
+        .where(Fixture.kickoff_utc <= now)
+        .order_by(Fixture.kickoff_utc, Fixture.id)
+    ))
+    counted = [(e, s, st) for e, s, _, _, _, _, st in rows if e.in_list]
+    running, history = 0.0, []
+    for e, s, f, comp, home, away, st in rows:
+        if e.in_list and st is not None:
+            running += st.profit
+        history.append({"entry": e, "selection": s, "fixture": f, "competition": comp, "home": home, "away": away,
+                        "settled": st, "counted": e.in_list, "running_profit": round(running, 4)})
+    return {"summary": {"all": _tally(counted),
+                        **{tier: _tally([r for r in counted if r[0].tier == tier])
+                           for tier in ("recommended", "watchlist")}},
+            "dropped": sum(not e.in_list for e, *_ in rows),
+            "history": history[::-1][:limit]}

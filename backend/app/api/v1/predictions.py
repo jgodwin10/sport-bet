@@ -10,8 +10,8 @@ from app.api.v1.serializers import prediction_detail, team_ref
 from app.core.config import get_settings
 from app.db.models import Competition, Fixture, Prediction, Selection, SettledSelection, Team
 from app.db.session import get_db
-from app.schemas.api import Page, SelectionRow, TopPickRow, TopPicks
-from app.services.top_picks import latest_prediction_ids, top_picks
+from app.schemas.api import Page, SelectionRow, TopPickRecord, TopPickResult, TopPickRow, TopPicks
+from app.services.top_picks import latest_prediction_ids, top_picks, track_record
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
 
@@ -99,6 +99,24 @@ def list_top_picks(db: Session = Depends(get_db), limit: int = Query(10, ge=1, l
                                           None, now), rank=i, tier=t.tier, score=t.score, ai=t.ai)
                for i, t in enumerate(picks, 1)],
     )
+
+
+@router.get("/top/record", response_model=TopPickRecord)
+def top_picks_record(db: Session = Depends(get_db), limit: int = Query(100, ge=1, le=500)) -> TopPickRecord:
+    rec = track_record(db, datetime.now(timezone.utc), limit=limit)
+    history = []
+    for h in rec["history"]:
+        e, s, f, st = h["entry"], h["selection"], h["fixture"], h["settled"]
+        history.append(TopPickResult(
+            fixture_id=f.id, match=f"{h['home'].name} v {h['away'].name}", home_team=team_ref(h["home"]),
+            away_team=team_ref(h["away"]), competition=h["competition"], kickoff_utc=f.kickoff_utc,
+            market=s.market, selection=s.selection, odds=s.decimal_odds, probability=s.probability,
+            expected_value=s.expected_value, rank=e.rank, best_rank=e.best_rank, tier=e.tier, counted=h["counted"],
+            score={"home": f.result.home_goals, "away": f.result.away_goals} if f.result else None,
+            outcome=st.outcome if st else None, profit=st.profit if st else None, clv=st.clv if st else None,
+            running_profit=h["running_profit"],
+        ))
+    return TopPickRecord(summary=rec["summary"], dropped=rec["dropped"], history=history)
 
 
 @router.get("/{prediction_id}")

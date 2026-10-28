@@ -30,6 +30,8 @@ WEIGHTS = {"low", "medium", "high"}
 BASIS = {"model", "news", "both"}
 NEWS_STATUS = {"confirmed", "reported", "rumour"}
 CONFIDENCE = {"low", "medium", "high"}
+POSITIONS = {"GK", "DF", "MF", "FW"}
+FORMATION = re.compile(r"[1-6](-[1-6]){1,4}")
 
 SYSTEM = (
     "You are a careful football analyst supporting a statistical prediction platform. "
@@ -37,7 +39,8 @@ SYSTEM = (
     "current, relevant information the model cannot see: injuries, suspensions, expected lineups, manager "
     "changes, fixture congestion, motivation (title race, relegation, cup priorities), travel and weather. "
     "Rules: only report news you actually found and say how solid it is; never invent players, quotes or "
-    "statistics; prefer sources from the last 14 days; say plainly when you found nothing relevant. "
+    "statistics; a predicted lineup must come from a published preview, predicted XI or the team's most recent "
+    "starting lineup adjusted for reported absences, never from guesswork; prefer sources from the last 14 days; say plainly when you found nothing relevant. "
     "Do not recommend bets or stakes. Respond with a single JSON object and nothing else."
 )
 
@@ -50,7 +53,12 @@ SCHEMA_HINT = """{
   "risks": ["things that could make the forecast wrong"],
   "model_assessment": "does the news support, weaken or not affect the model's view? be specific",
   "probability_view": {"home": 0.0, "draw": 0.0, "away": 0.0},
-  "confidence": "low|medium|high"
+  "confidence": "low|medium|high",
+  "predicted_lineups": {
+    "home": {"formation": "4-2-3-1", "source": "where the lineup comes from, with date",
+             "players": [{"name": "player name", "position": "GK|DF|MF|FW"}]},
+    "away": null
+  }
 }"""
 
 
@@ -107,6 +115,10 @@ def build_prompt(db: Session, fixture: Fixture, prediction: Prediction, now: dat
         "motivation or weather, so say where those matter and how much.",
         "3. Give your own home/draw/away probabilities (they must sum to 1). Stay close to the model unless "
         "the news gives a concrete reason to move, and explain any move in model_assessment.",
+        "4. Search for each team's predicted (or, if already announced, official) starting XI and formation. List "
+        "the 11 starters goalkeeper first, then each line from defence to attack, each line in the usual order "
+        "(right-back first, right-sided players first), so they fit the formation. Use null for a team when no "
+        "source gives a lineup.",
         "",
         "Return JSON exactly in this shape:",
         SCHEMA_HINT,
@@ -135,12 +147,25 @@ def _choice(value: object, allowed: set[str], default: str) -> str:
     return v if v in allowed else default
 
 
+def _lineup(value: object) -> dict | None:
+    if not isinstance(value, dict):
+        return None
+    players = [{"name": _s(p.get("name"), 80),
+                "position": pos if (pos := _s(p.get("position"), 4).upper()) in POSITIONS else None}
+               for p in (value.get("players") or []) if isinstance(p, dict) and _s(p.get("name"), 80)][:11]
+    if not players:
+        return None
+    formation = _s(value.get("formation"), 20)
+    return {"formation": formation if FORMATION.fullmatch(formation) else None, "players": players,
+            "source": _s(value.get("source"), 300)}
+
+
 def normalise(text: str) -> dict:
     """Validate Gemini's JSON into the stored shape. Unparseable answers are kept as plain text."""
     data = _extract_json(text)
     if data is None:
         return {"summary": _s(text, 4000), "structured": False, "key_factors": [], "team_news": [], "risks": [],
-                "model_assessment": "", "probability_view": None, "confidence": "low"}
+                "model_assessment": "", "probability_view": None, "confidence": "low", "predicted_lineups": None}
     factors = [{"title": _s(f.get("title"), 120), "detail": _s(f.get("detail"), 600),
                 "favours": _choice(f.get("favours"), FAVOURS, "neither"),
                 "weight": _choice(f.get("weight"), WEIGHTS, "medium"),
@@ -166,7 +191,9 @@ def normalise(text: str) -> dict:
                 view = {k: round(v / total, 4) for k, v in vals.items()}
     return {"summary": _s(data.get("summary"), 2000), "structured": True, "key_factors": factors,
             "team_news": news, "risks": risks, "model_assessment": _s(data.get("model_assessment"), 1500),
-            "probability_view": view, "confidence": _choice(data.get("confidence"), CONFIDENCE, "low")}
+            "probability_view": view, "confidence": _choice(data.get("confidence"), CONFIDENCE, "low"),
+            "predicted_lineups": {side: _lineup(lu.get(side)) for side in ("home", "away")}
+            if isinstance(lu := data.get("predicted_lineups"), dict) else None}
 
 
 def analysis_out(a: AiAnalysis) -> dict:
