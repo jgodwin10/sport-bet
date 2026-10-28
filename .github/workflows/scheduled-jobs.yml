@@ -55,18 +55,22 @@ jobs:
       - run: pip install -r requirements.txt
 
       # Daily steps first so the predictions below use the new results and odds.
-      # Its own timeout, so a slow backfill can't hit the job timeout and cancel the steps below.
-      # Each season is committed as it finishes, so the next daily run picks up where it stopped.
+      # History and crests save as they go (per season file / per team), so a large backfill is
+      # capped with `timeout` and the next daily run picks up where it stopped; hitting the cap
+      # (exit 124) is a warning, not a failure. `timeout` kills Python itself: a step's
+      # timeout-minutes only stops the shell and leaves Python running until the job ends.
+      # The caps leave room for the steps below inside the job's 45 minutes.
       - name: Ingest history
         if: ${{ !cancelled() && env.DAILY == 'true' }}
-        timeout-minutes: 25
-        run: python -m app.cli ingest-history
+        timeout-minutes: 22
+        run: timeout 20m python -m app.cli ingest-history || { [ $? -eq 124 ] && echo "::warning::History backfill hit its 20-minute cap; it continues on the next daily run"; }
       - name: Refresh odds
         if: ${{ !cancelled() && env.DAILY == 'true' && env.THE_ODDS_API_KEY != '' }}
         run: python -m app.cli refresh-odds
       - name: Refresh crests
         if: ${{ !cancelled() && env.DAILY == 'true' }}
-        run: python -m app.cli ingest-logos
+        timeout-minutes: 12
+        run: timeout 10m python -m app.cli ingest-logos || { [ $? -eq 124 ] && echo "::warning::Crest refresh hit its 10-minute cap; it continues on the next daily run"; }
 
       # Later steps run even if an earlier one failed; the job still reports the failure.
       - name: Fetch fixtures
