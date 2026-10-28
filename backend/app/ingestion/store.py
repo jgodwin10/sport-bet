@@ -47,6 +47,11 @@ class StoreStats:
         return {**self.__dict__, "unmatched": self.unmatched[:50]}
 
 
+def _chunks(items: list, size: int = 1000):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
 class Store:
     def __init__(self, db: Session, odds_bookmakers: set[str] | None = None) -> None:
         self.db = db
@@ -54,16 +59,29 @@ class Store:
         self.odds_bookmakers = odds_bookmakers  # restrict which bookmakers are stored (None = all)
         self._bookmakers: dict[str, int] = {}
         self._seasons: dict[tuple[int, str], int] = {}
+        self._competitions: dict[str, Competition] = {}
+        # Rows a batch touches, loaded up front by _prefetch. The database is remote, and one round
+        # trip per lookup made a season file take over ten minutes. A key missing from these
+        # dicts falls back to a query; for _results and _stats_rows a fixture id in _loaded
+        # means a missing key is a missing row.
+        self._mappings: dict[tuple[str, str, str], int | None] = {}
+        self._by_key: dict[str, Fixture | None] = {}
+        self._loaded: set[int] = set()
+        self._results: dict[int, MatchResult] = {}
+        self._stats_rows: dict[tuple[int, int], TeamMatchStats] = {}
+        self._odds_rows: list[dict] = []
 
     # ------------------------------------------------------------- reference
     def competition(self, code: str) -> Competition:
-        comp = self.db.scalar(select(Competition).where(Competition.code == code))
-        if comp is None:
-            d = COMPETITIONS[code]
-            comp = Competition(code=code, name=d.name, country=d.country, tier=d.tier, format=d.format)
-            self.db.add(comp)
-            self.db.flush()
-        return comp
+        if code not in self._competitions:
+            comp = self.db.scalar(select(Competition).where(Competition.code == code))
+            if comp is None:
+                d = COMPETITIONS[code]
+                comp = Competition(code=code, name=d.name, country=d.country, tier=d.tier, format=d.format)
+                self.db.add(comp)
+                self.db.flush()
+            self._competitions[code] = comp
+        return self._competitions[code]
 
     def season_id(self, competition_id: int, label: str) -> int:
         key = (competition_id, label)
@@ -109,10 +127,16 @@ class Store:
         if duplicate and not force:
             stats.skipped_duplicate_payload = True
             return stats
+        self._prefetch(batch.fixtures)
+        matched = []
         for nf in batch.fixtures:
             fixture = self._match_or_create(nf, src, stats)
-            if fixture is None:
-                continue
+            if fixture is not None:
+                matched.append((nf, fixture))
+        created = [f for _, f in matched if f.id is None]
+        self.db.flush()  # new fixtures get their ids in one round trip
+        self._loaded.update(f.id for f in created)  # no result or stats rows yet
+        for nf, fixture in matched:
             if nf.provider_fixture_id:
                 self._map(nf.provider, "fixture", nf.provider_fixture_id, fixture.id)
             if nf.home_goals is not None and nf.away_goals is not None:
@@ -123,28 +147,74 @@ class Store:
             if nf.odds:
                 stats.odds += self._odds(fixture, nf, src)
         self.db.flush()
+        self._write_odds()
         return stats
 
-    def _match_or_create(self, nf: NormalizedFixture, src: SourceRecord, stats: StoreStats) -> Fixture | None:
+    def _teams(self, nf: NormalizedFixture) -> tuple[Competition, bool, int | None, int | None]:
         comp = self.competition(nf.competition_code)
         create = nf.provider in (CUP_FIXTURE_SOURCES if comp.format == "cup" else FIXTURE_SOURCES)
         home = self.teams.resolve(nf.provider, nf.home_name, nf.competition_code, can_create=create)
         away = self.teams.resolve(nf.provider, nf.away_name, nf.competition_code, can_create=create)
+        return comp, create, home, away
+
+    @staticmethod
+    def _natural_key(comp: Competition, nf: NormalizedFixture, home: int, away: int) -> str:
+        return (f"{comp.code}:{nf.season_label}:{home}:{away}" if nf.stage == "league"
+                else f"{comp.code}:{nf.season_label}:{home}:{away}:{nf.kickoff_utc.date()}")
+
+    def _prefetch(self, fixtures: list[NormalizedFixture]) -> None:
+        """Load the mappings, fixtures, results and team stats a batch touches in a few queries."""
+        self._mappings, self._by_key, self._loaded, self._results, self._stats_rows = {}, {}, set(), {}, {}
+        ids: dict[str, set[str]] = {}
+        for nf in fixtures:
+            if nf.provider_fixture_id:
+                ids.setdefault(nf.provider, set()).add(nf.provider_fixture_id)
+            comp, _, home, away = self._teams(nf)
+            if home is not None and away is not None:
+                self._by_key[self._natural_key(comp, nf, home, away)] = None
+        for provider, pids in ids.items():
+            for pid in pids:
+                self._mappings[(provider, "fixture", pid)] = None
+            for chunk in _chunks(list(pids)):
+                for pid, entity_id in self.db.execute(select(ProviderMapping.provider_id, ProviderMapping.entity_id).where(
+                        ProviderMapping.provider == provider, ProviderMapping.entity_type == "fixture",
+                        ProviderMapping.provider_id.in_(chunk))):
+                    self._mappings[(provider, "fixture", pid)] = entity_id
+        found: dict[int, Fixture] = {}
+        for chunk in _chunks(list(self._by_key)):
+            found.update((f.id, f) for f in self.db.scalars(select(Fixture).where(Fixture.natural_key.in_(chunk))))
+        mapped = {i for i in self._mappings.values() if i is not None} - set(found)
+        for chunk in _chunks(list(mapped)):
+            found.update((f.id, f) for f in self.db.scalars(select(Fixture).where(Fixture.id.in_(chunk))))
+        for f in found.values():
+            if f.natural_key in self._by_key:
+                self._by_key[f.natural_key] = f
+        for chunk in _chunks(list(found)):
+            self._results.update((r.fixture_id, r) for r in self.db.scalars(
+                select(MatchResult).where(MatchResult.fixture_id.in_(chunk))))
+            self._stats_rows.update(((r.fixture_id, r.team_id), r) for r in self.db.scalars(
+                select(TeamMatchStats).where(TeamMatchStats.fixture_id.in_(chunk))))
+        self._loaded = set(found)
+
+    def _match_or_create(self, nf: NormalizedFixture, src: SourceRecord, stats: StoreStats) -> Fixture | None:
+        comp, create, home, away = self._teams(nf)
         if home is None or away is None:
             stats.unmatched.append(f"{nf.competition_code}: {nf.home_name} v {nf.away_name}")
             return None
         season_id = self.season_id(comp.id, nf.season_label)
-        natural_key = (f"{comp.code}:{nf.season_label}:{home}:{away}" if nf.stage == "league"
-                       else f"{comp.code}:{nf.season_label}:{home}:{away}:{nf.kickoff_utc.date()}")
+        natural_key = self._natural_key(comp, nf, home, away)
 
         fixture = None
         if nf.provider_fixture_id:
-            mapped = self.db.scalar(select(ProviderMapping.entity_id).where(
-                ProviderMapping.provider == nf.provider, ProviderMapping.entity_type == "fixture",
-                ProviderMapping.provider_id == nf.provider_fixture_id))
+            map_key = (nf.provider, "fixture", nf.provider_fixture_id)
+            mapped = self._mappings[map_key] if map_key in self._mappings else self.db.scalar(
+                select(ProviderMapping.entity_id).where(
+                    ProviderMapping.provider == nf.provider, ProviderMapping.entity_type == "fixture",
+                    ProviderMapping.provider_id == nf.provider_fixture_id))
             fixture = self.db.get(Fixture, mapped) if mapped else None
         if fixture is None:
-            fixture = self.db.scalar(select(Fixture).where(Fixture.natural_key == natural_key))
+            fixture = self._by_key[natural_key] if natural_key in self._by_key else self.db.scalar(
+                select(Fixture).where(Fixture.natural_key == natural_key))
         if fixture is None and not create:
             window = timedelta(days=3)
             fixture = self.db.scalar(select(Fixture).where(
@@ -165,7 +235,7 @@ class Store:
                               kickoff_source_record_id=src.id, status=nf.status, neutral=nf.neutral,
                               stage=nf.stage, venue=nf.venue, referee=nf.referee)
             self.db.add(fixture)
-            self.db.flush()
+            self._by_key[natural_key] = fixture
             stats.fixtures_created += 1
             return fixture
 
@@ -227,11 +297,14 @@ class Store:
         return not (fixture.status == "finished" and nf.status != "finished")
 
     def _result(self, fixture: Fixture, nf: NormalizedFixture, src: SourceRecord, stats: StoreStats) -> None:
-        existing = self.db.get(MatchResult, fixture.id)
+        existing = (self._results.get(fixture.id) if fixture.id in self._loaded
+                    else self.db.get(MatchResult, fixture.id))
         if existing is None:
-            self.db.add(MatchResult(fixture_id=fixture.id, home_goals=nf.home_goals, away_goals=nf.away_goals,
-                                    ht_home_goals=nf.ht_home_goals, ht_away_goals=nf.ht_away_goals,
-                                    source_record_id=src.id))
+            row = MatchResult(fixture_id=fixture.id, home_goals=nf.home_goals, away_goals=nf.away_goals,
+                              ht_home_goals=nf.ht_home_goals, ht_away_goals=nf.ht_away_goals,
+                              source_record_id=src.id)
+            self.db.add(row)
+            self._results[fixture.id] = row
             fixture.status = "finished"
             stats.results += 1
         elif (existing.home_goals, existing.away_goals) != (nf.home_goals, nf.away_goals):
@@ -249,10 +322,12 @@ class Store:
                     src: SourceRecord) -> None:
         if ts is None:
             return
-        row = self.db.get(TeamMatchStats, (fixture.id, team_id))
+        row = (self._stats_rows.get((fixture.id, team_id)) if fixture.id in self._loaded
+               else self.db.get(TeamMatchStats, (fixture.id, team_id)))
         if row is None:
             row = TeamMatchStats(fixture_id=fixture.id, team_id=team_id, is_home=is_home)
             self.db.add(row)
+            self._stats_rows[(fixture.id, team_id)] = row
         for attr, value in ts.__dict__.items():
             if value is not None:
                 setattr(row, attr, value)
@@ -271,20 +346,28 @@ class Store:
                 "kind": o.kind, "observed_at": o.observed_at, "retrieved_at": src.retrieved_at,
                 "source_record_id": src.id,
             })
-        if not rows:
-            return 0
-        dialect = self.db.get_bind().dialect.name
-        insert = postgresql.insert if dialect == "postgresql" else sqlite.insert
-        self.db.execute(insert(OddsSnapshot).values(rows).on_conflict_do_nothing())
+        self._odds_rows.extend(rows)
         return len(rows)
 
+    def _write_odds(self) -> None:
+        """Insert the batch's odds in a few statements rather than one per fixture."""
+        if not self._odds_rows:
+            return
+        dialect = self.db.get_bind().dialect.name
+        insert = postgresql.insert if dialect == "postgresql" else sqlite.insert
+        for chunk in _chunks(self._odds_rows, 2000):  # 11 parameters a row; Postgres allows 65,535
+            self.db.execute(insert(OddsSnapshot).values(chunk).on_conflict_do_nothing())
+        self._odds_rows = []
+
     def _map(self, provider: str, entity_type: str, provider_id: str, entity_id: int) -> None:
-        exists = self.db.scalar(select(ProviderMapping.id).where(
+        key = (provider, entity_type, provider_id)
+        exists = self._mappings[key] if key in self._mappings else self.db.scalar(select(ProviderMapping.id).where(
             ProviderMapping.provider == provider, ProviderMapping.entity_type == entity_type,
             ProviderMapping.provider_id == provider_id))
         if not exists:
             self.db.add(ProviderMapping(provider=provider, entity_type=entity_type, provider_id=provider_id,
                                         entity_id=entity_id))
+            self._mappings[key] = entity_id
 
     # ----------------------------------------------------------- team news
     def ingest_availability(self, batch: ProviderBatch, fixture: Fixture) -> int:

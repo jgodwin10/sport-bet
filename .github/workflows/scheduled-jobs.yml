@@ -55,8 +55,11 @@ jobs:
       - run: pip install -r requirements.txt
 
       # Daily steps first so the predictions below use the new results and odds.
+      # Its own timeout, so a slow backfill can't hit the job timeout and cancel the steps below.
+      # Each season is committed as it finishes, so the next daily run picks up where it stopped.
       - name: Ingest history
         if: ${{ !cancelled() && env.DAILY == 'true' }}
+        timeout-minutes: 25
         run: python -m app.cli ingest-history
       - name: Refresh odds
         if: ${{ !cancelled() && env.DAILY == 'true' && env.THE_ODDS_API_KEY != '' }}

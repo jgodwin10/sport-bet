@@ -1,9 +1,10 @@
 """Ingestion: idempotency, identity resolution, conflicts and leakage guards.
 All data is SYNTHETIC."""
 
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 
 from app.db.models import DataConflict, Fixture, MatchResult, OddsSnapshot, SourceRecord, Team
 from app.ingestion.store import Store
@@ -34,6 +35,25 @@ def test_identical_payload_is_ingested_once(db):
     assert s1.fixtures_created == 90 and s1.results == 90
     assert s2.skipped_duplicate_payload
     assert db.scalar(select(func.count(Fixture.id))) == 90
+
+
+def test_reingesting_a_changed_season_file_takes_few_queries(db):
+    # The production database is remote: per-fixture queries made each daily season file take minutes.
+    fixtures = synthetic_league(datetime(2024, 8, 10, tzinfo=timezone.utc), seasons=1)
+    Store(db).ingest_fixtures(make_batch(fixtures))
+    db.commit()
+    statements = []
+    listener = lambda *args: statements.append(args[2])  # noqa: E731
+    event.listen(db.get_bind(), "before_cursor_execute", listener)
+    try:
+        stats = Store(db).ingest_fixtures(replace(make_batch(fixtures), payload_hash="changed"))
+        db.commit()
+    finally:
+        event.remove(db.get_bind(), "before_cursor_execute", listener)
+    assert stats.fixtures_created == 0 and not stats.skipped_duplicate_payload
+    assert db.scalar(select(func.count(Fixture.id))) == 90
+    assert db.scalar(select(func.count(MatchResult.fixture_id))) == 90
+    assert len(statements) < 40
 
 
 def test_unknown_provider_team_name_is_flagged_not_guessed(db):
