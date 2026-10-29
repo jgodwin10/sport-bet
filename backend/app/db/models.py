@@ -430,7 +430,7 @@ class StakeEntry(Base):
 
 
 class AiAnalysis(Base):
-    """Narrative match analysis written by an LLM (Gemini) from the model output plus web search.
+    """Narrative match analysis written by an LLM (OpenAI or Gemini) from the model output plus web search.
 
     Advisory only: it never feeds probabilities, selections or reliability. Rows are kept
     (including failures) so AI views can later be compared against results.

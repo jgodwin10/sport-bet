@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 from sqlalchemy import select
 
+from app.backtest import engine
 from app.backtest.engine import BacktestParams, bootstrap_roi_interval, max_drawdown, run_backtest
 from app.core.config import get_settings
 from app.db.models import (
@@ -61,6 +62,31 @@ def test_backtest_never_uses_results_on_or_after_step(db, monkeypatch):
     assert "learned_weights" in res and set(res["one_x_two"]["comparison_common_subset"]) >= {"market", "ensemble"}
     for bet in res["bets"]:
         assert bet["closing_odds"] is None or bet["closing_odds"] > 1
+
+
+def test_backtest_competitions_advance_through_time_together(db, monkeypatch):
+    # Weights at a step come from every competition's earlier predictions only, so two leagues
+    # playing on the same date use the same weights, whatever order they are passed in.
+    _seed(db)
+    comp_id = db.scalar(select(Fixture.competition_id))
+    matches = load_backtest_matches(db, comp_id, before=datetime(2028, 1, 1, tzinfo=timezone.utc))
+    used: dict[tuple[str, str], dict | None] = {}
+    original = engine._predict_one
+
+    def spy(suite, m, comp, weights, params, bets):
+        used[(comp, m.record.kickoff.isoformat())] = weights
+        return original(suite, m, comp, weights, params, bets)
+
+    monkeypatch.setattr(engine, "_predict_one", spy)
+    params = BacktestParams(evaluate_from=datetime(2025, 8, 1, tzinfo=timezone.utc),
+                            evaluate_to=datetime(2027, 6, 1, tzinfo=timezone.utc),
+                            suite=SuiteConfig(compute_intervals=False), min_oos_for_weights=60)
+    first = run_backtest({"B": matches, "A": matches}, params)
+    assert any(w is not None for w in used.values())
+    assert all(used[("A", d)] == used[("B", d)] for (c, d) in used if c == "A")
+    second = run_backtest({"A": matches, "B": matches}, params)
+    assert first["learned_weights"] == second["learned_weights"]
+    assert first["one_x_two"]["all"] == second["one_x_two"]["all"]
 
 
 def test_load_backtest_matches_excludes_pre_match_odds_after_kickoff(db):

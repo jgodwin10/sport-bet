@@ -10,6 +10,7 @@ from sqlalchemy import event, func, select
 from app.core.config import Settings
 from app.db.models import DataConflict, Fixture, MatchResult, OddsSnapshot, SourceRecord, Team
 from app.ingestion.competitions import COMPETITIONS
+from app.ingestion import service
 from app.ingestion.service import IngestionService
 from app.ingestion.store import Store
 from app.ingestion.teams import TeamResolver, normalize
@@ -220,3 +221,42 @@ def test_odds_api_pricing_is_throttled_and_keeps_a_credit_reserve(db):
     # The reserve carries over to later runs through the stored response
     assert "29 credits left" in _odds_service(db, api, odds_api_refresh_hours=0).odds()["ENG-1"]
     assert api.calls == ["ENG-1"]
+
+
+def _matchday_pick(db, monkeypatch, now):
+    """An ENG-1 top pick kicking off in 3 hours whose only odds are 10 hours old."""
+    kickoff = now + timedelta(hours=3)
+    old = [NormalizedOdds("b365", "Bet365", "1x2", sel, o, "pre_match", now - timedelta(hours=10))
+           for sel, o in (("home", 2.1), ("draw", 3.4), ("away", 3.6))]
+    Store(db).ingest_fixtures(make_batch([_fx(kickoff=kickoff, odds=old)]))
+    db.commit()
+    fixture = db.scalar(select(Fixture))
+    monkeypatch.setattr(service, "top_picks", lambda db, now: [SimpleNamespace(fixture=fixture, competition="ENG-1")])
+    return [_fx(provider="the_odds_api", kickoff=kickoff, pid="e1",
+                odds=[replace(o, decimal_odds=o.decimal_odds + 0.1, observed_at=now) for o in old])]
+
+
+def test_top_pick_on_match_day_is_repriced_once_per_refresh_interval(db, monkeypatch):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    api = _FakeOddsApi(_matchday_pick(db, monkeypatch, now), remaining=400)
+    first = _odds_service(db, api).odds()
+    assert api.calls == ["ENG-1"] and first["ENG-1"]["odds"] == 3
+    # Re-priced less than 6 hours ago, and every fixture has odds: nothing to do
+    assert "has odds" in _odds_service(db, api).odds()["ENG-1"] and api.calls == ["ENG-1"]
+
+
+def test_match_day_repricing_leaves_the_daily_allowance_for_the_rest_of_the_month(db, monkeypatch):
+    now = datetime.now(timezone.utc).replace(microsecond=0)
+    api = _FakeOddsApi(_matchday_pick(db, monkeypatch, now))
+    floor = 30 + 8 * service._days_left_in_month(now)
+    db.add(SourceRecord(provider="the_odds_api", resource="/sports/soccer_epl/events", payload_hash="x",
+                        meta={"requests_remaining": str(floor - 1)}))
+    db.commit()
+    assert f"{floor - 1} credits left (reserve {floor})" in _odds_service(db, api).odds()["ENG-1"]
+    assert api.calls == []
+
+
+def test_days_left_in_month():
+    assert service._days_left_in_month(datetime(2026, 10, 29, 12, tzinfo=timezone.utc)) == 3
+    assert service._days_left_in_month(datetime(2026, 12, 31, 23, tzinfo=timezone.utc)) == 1
+    assert service._days_left_in_month(datetime(2026, 2, 1, tzinfo=timezone.utc)) == 28

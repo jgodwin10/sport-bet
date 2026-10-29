@@ -236,7 +236,7 @@ def fake(db, monkeypatch):
     db.commit()
     PredictionService(db, get_settings()).predict_upcoming("test")
     g = FakeGemini()
-    monkeypatch.setattr(ai_analysis, "get_gemini", lambda: g.client)
+    monkeypatch.setattr(ai_analysis, "get_ai", lambda: g.client)
     return g
 
 
@@ -299,7 +299,7 @@ def test_api_reports_unconfigured(db, monkeypatch):
     fixtures = synthetic_league(START, seasons=1, upcoming_after=datetime.now(timezone.utc))
     Store(db).ingest_fixtures(make_batch(fixtures))
     db.commit()
-    monkeypatch.setattr(ai_analysis, "get_gemini", lambda: GeminiClient([], ["m"]))
+    monkeypatch.setattr(ai_analysis, "get_ai", lambda: GeminiClient([], ["m"]))
     f = db.scalar(select(Fixture).limit(1))
     with TestClient(create_app()) as c:
         assert c.get(f"/api/v1/fixtures/{f.id}/ai-analysis").json()["configured"] is False

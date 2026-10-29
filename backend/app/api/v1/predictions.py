@@ -7,9 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.v1.serializers import prediction_detail, team_ref
-from app.core.config import get_settings
 from app.db.models import Competition, Fixture, Prediction, Selection, SettledSelection, Team
 from app.db.session import get_db
+from app.providers.ai import get_ai
 from app.schemas.api import Page, SelectionRow, TopPickRecord, TopPickResult, TopPickRow, TopPicks
 from app.services.top_picks import latest_prediction_ids, top_picks, track_record
 
@@ -94,7 +94,7 @@ def list_top_picks(db: Session = Depends(get_db), limit: int = Query(10, ge=1, l
     now = datetime.now(timezone.utc)
     picks = top_picks(db, now, limit=limit, days=days)
     return TopPicks(
-        generated_at=now, days=days, ai_configured=bool(get_settings().gemini_key_list),
+        generated_at=now, days=days, ai_configured=get_ai().configured,
         items=[TopPickRow(**selection_row(t.selection, t.prediction, t.fixture, t.competition, t.home, t.away,
                                           None, now), rank=i, tier=t.tier, score=t.score, ai=t.ai)
                for i, t in enumerate(picks, 1)],

@@ -11,7 +11,7 @@ import {
   KeyValue, Loading, MetricStrip, OUTCOME_COLORS, OutcomeBar, Pill, ReliabilityBadge, Segmented, SERIES, StatTile, TeamLogo,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, fmtTime, num, odds, pct, signedPct } from "../lib/format";
-import { bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plainFacts, selectionLabel, verdict } from "../lib/language";
+import { aiProviderName, bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plainFacts, selectionLabel, verdict } from "../lib/language";
 
 const TABS = [
   { value: "summary", label: "Summary" },
@@ -241,8 +241,8 @@ function AiAnalysisCard({ a, p }: { a: Analysis; p: PredictionDetail }) {
 
   return (
     <Card title={<><Icon name="sparkle" size={16} />AI analysis</>} info={note}
-          subtitle={analysis ? `Gemini${analysis.model ? ` (${analysis.model})` : ""} · ${fmtDateTime(analysis.created_at)}${stale ? " · based on an earlier prediction" : ""}`
-                             : "Written by Gemini from our model's evidence plus a web search for team news"}
+          subtitle={analysis ? `${aiProviderName(analysis.provider)}${analysis.model ? ` (${analysis.model})` : ""} · ${fmtDateTime(analysis.created_at)}${stale ? " · based on an earlier prediction" : ""}`
+                             : "Written by AI from our model's evidence plus a web search for team news"}
           action={button}>
       {gen.isError && <p className="mb-3 text-[13px] text-neg">{(gen.error as Error).message}</p>}
       {!analysis ? (

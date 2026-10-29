@@ -16,9 +16,10 @@ import logging
 import re
 import threading
 import time
-from dataclasses import dataclass, field
 
 import httpx
+
+from app.providers.ai import AiError, AiResult, AiUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -30,11 +31,11 @@ REJECTED_KEY_COOLDOWN = 6 * 3600.0
 SERVER_ERROR_COOLDOWN = 30.0
 
 
-class GeminiError(RuntimeError):
+class GeminiError(AiError):
     """The request itself failed (bad request, blocked or empty response)."""
 
 
-class GeminiUnavailable(GeminiError):
+class GeminiUnavailable(GeminiError, AiUnavailable):
     """No key/model combination could serve the request right now."""
 
 
@@ -96,13 +97,7 @@ class KeyPool:
         return out
 
 
-@dataclass
-class GeminiResult:
-    text: str
-    model: str
-    key_slot: int
-    sources: list[dict] = field(default_factory=list)  # [{title, uri}]
-    search_queries: list[str] = field(default_factory=list)
+GeminiResult = AiResult
 
 
 def _retry_delay(body: dict) -> float | None:
@@ -114,6 +109,8 @@ def _retry_delay(body: dict) -> float | None:
 
 
 class GeminiClient:
+    name = "gemini"
+
     def __init__(self, keys: list[str], models: list[str], timeout: float = 120.0,
                  transport: httpx.BaseTransport | None = None, clock=time.monotonic) -> None:
         self.pool = KeyPool(keys, clock)
@@ -204,7 +201,7 @@ class GeminiClient:
             if web.get("uri") and web["uri"] not in seen:
                 seen.add(web["uri"])
                 sources.append({"title": web.get("title") or web["uri"], "uri": web["uri"]})
-        return GeminiResult(text=text, model=model, key_slot=slot + 1, sources=sources,
+        return GeminiResult(text=text, model=model, key_slot=slot + 1, provider="gemini", sources=sources,
                             search_queries=list(meta.get("webSearchQueries") or []))
 
 

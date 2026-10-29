@@ -142,3 +142,6 @@ const PROVIDERS: Record<string, string> = {
   api_football: "API-Football", thesportsdb: "TheSportsDB (crests)",
 };
 export const providerName = (key: string) => PROVIDERS[key] ?? key.replace(/_/g, " ");
+
+const AI_PROVIDERS: Record<string, string> = { openai: "OpenAI", gemini: "Gemini" };
+export const aiProviderName = (key: string) => AI_PROVIDERS[key] ?? "AI";

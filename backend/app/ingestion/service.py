@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import exists, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -19,10 +19,16 @@ from app.ingestion.store import Store
 from app.providers.base import ProviderError, ProviderNotConfigured
 from app.providers.football_data_co_uk import current_season_start
 from app.providers.registry import Providers
+from app.services.top_picks import top_picks
 
 log = logging.getLogger(__name__)
 
 HISTORY_BOOKMAKERS = {"avg", "max", "ps", "b365", "bfe"}
+
+
+def _days_left_in_month(now: datetime) -> int:
+    first_next = (now.replace(day=1) + timedelta(days=32)).replace(day=1)
+    return max(1, (first_next.date() - now.date()).days)
 
 
 def _credits(meta: dict, default: int | None) -> int | None:
@@ -206,21 +212,30 @@ class IngestionService:
         now = datetime.now(timezone.utc)
         priced = set(s.odds_api_competitions)
         remaining = self._credits_remaining(now - timedelta(hours=24))
+        matchday = self._matchday_competitions(now)
+        # Match-day re-pricing is optional: it stops early enough to leave a daily allowance for
+        # routine pricing until the credits renew (taken as the start of next month).
+        paced = s.odds_api_credit_reserve + s.odds_api_daily_allowance * _days_left_in_month(now)
         for code in s.competitions:
             if code not in priced or not COMPETITIONS[code].odds_api:
                 continue
             if COMPETITIONS[code].format == "cup":
-                if not self._upcoming_in(code, now, s.odds_api_days_ahead):
-                    summary[code] = f"skipped: no fixture in the next {s.odds_api_days_ahead} days"
-                    continue
-            elif not self._upcoming_in(code, now, s.odds_api_days_ahead, unpriced=True):
-                summary[code] = f"skipped: every fixture in the next {s.odds_api_days_ahead} days has odds"
+                due = self._upcoming_in(code, now, s.odds_api_days_ahead)
+                why = f"no fixture in the next {s.odds_api_days_ahead} days"
+            else:
+                due = self._upcoming_in(code, now, s.odds_api_days_ahead, unpriced=True)
+                why = f"every fixture in the next {s.odds_api_days_ahead} days has odds"
+            if due and self._priced_since(code, now - timedelta(hours=s.odds_api_refresh_hours)):
+                due, why = False, f"priced in the last {s.odds_api_refresh_hours:g}h"
+            floor = s.odds_api_credit_reserve
+            if not due and code in matchday and not self._priced_since(
+                    code, now - timedelta(hours=s.odds_api_matchday_refresh_hours)):
+                due, floor = True, paced
+            if not due:
+                summary[code] = f"skipped: {why}"
                 continue
-            if self._priced_since(code, now - timedelta(hours=s.odds_api_refresh_hours)):
-                summary[code] = f"skipped: priced in the last {s.odds_api_refresh_hours:g}h"
-                continue
-            if remaining is not None and remaining < s.odds_api_credit_reserve:
-                summary[code] = f"skipped: {remaining} credits left (reserve {s.odds_api_credit_reserve})"
+            if remaining is not None and remaining < floor:
+                summary[code] = f"skipped: {remaining} credits left (reserve {floor})"
                 continue
             try:
                 batch = self.providers.odds_api.odds(code)
@@ -241,6 +256,22 @@ class IngestionService:
                                             SourceRecord.retrieved_at > since)
             .order_by(SourceRecord.retrieved_at.desc(), SourceRecord.id.desc()).limit(1))
         return _credits(meta or {}, None)
+
+    def _matchday_competitions(self, now: datetime) -> set[str]:
+        """Competitions with a top pick kicking off within the match-day window whose latest odds are
+        older than the match-day refresh interval: the "odds missing or stale" rule would hold it back."""
+        s = self.settings
+        soon = now + timedelta(hours=s.odds_api_matchday_hours)
+        stale = now - timedelta(hours=s.odds_api_matchday_refresh_hours)
+        out = set()
+        for t in top_picks(self.db, now):
+            if t.fixture.kickoff_utc > soon or t.competition in out:
+                continue
+            observed = self.db.scalar(select(func.max(OddsSnapshot.observed_at)).where(
+                OddsSnapshot.fixture_id == t.fixture.id, OddsSnapshot.kind == "pre_match"))
+            if observed is not None and observed < stale:
+                out.add(t.competition)
+        return out
 
     def _priced_since(self, code: str, since: datetime) -> bool:
         """The Odds API priced this competition after `since` (a priced call is a /odds resource)."""

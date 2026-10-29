@@ -168,7 +168,7 @@ export default function Settings() {
               <li className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
                 <span className="flex items-center gap-3 min-w-0">
                   <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", server.ai.configured ? "bg-pos" : "bg-white/20")} />
-                  <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">Gemini AI analysis</span>
+                  <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">AI analysis</span>
                     <span className="block text-2xs text-ink-4 truncate">
                       {server.ai.configured
                         ? `${server.ai.keys.filter((k: any) => k.available).length} of ${server.ai.keys.length} keys ready · ${server.ai.models[0]}`

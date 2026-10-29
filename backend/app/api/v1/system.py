@@ -17,7 +17,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.ingestion.competitions import COMPETITIONS
-from app.providers.gemini import get_gemini
+from app.providers.ai import get_ai
 from app.providers.registry import get_providers
 from app.schemas.api import (
     BacktestOut, BacktestRequest, CompetitionOut, IngestRequest, LoginRequest, ModelVersionOut, Page,
@@ -58,7 +58,7 @@ def health(db: Session = Depends(get_db)) -> dict:
         "status": "ok" if checks["database"] == "ok" else "degraded", "checks": checks,
         "task_mode": s.task_mode, "environment": s.environment,
         "providers": [{k: v for k, v in p.items() if k != "capabilities"} for p in get_providers().status()],
-        "ai": get_gemini().status(),
+        "ai": get_ai().status(),
         "recent_jobs": [{"id": j.id, "type": j.job_type, "status": j.status, "started_at": j.started_at,
                          "finished_at": j.finished_at, "error": j.error} for j in jobs],
         "last_result_recorded_at": last_result,
@@ -120,7 +120,7 @@ def read_settings(db: Session = Depends(get_db)) -> dict:
             "update_intervals_minutes": {"fixtures": s.fixtures_refresh_minutes, "odds": s.odds_refresh_minutes,
                                          "lineups": s.lineup_check_minutes},
             "providers": [{k: v for k, v in p.items()} for p in get_providers().status()],
-            "ai": get_gemini().status(),
+            "ai": get_ai().status(),
             "responsible_gambling_url": s.responsible_gambling_url,
         },
     }

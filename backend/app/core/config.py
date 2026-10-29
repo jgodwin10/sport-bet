@@ -10,6 +10,15 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.ingestion.competitions import COMPETITIONS, CUPS
 
 
+def _names(raw: str) -> list[str]:
+    return [m.strip() for m in raw.split(",") if m.strip()]
+
+
+def _keys(secret: SecretStr | None) -> list[str]:
+    raw = secret.get_secret_value() if secret else ""
+    return list(dict.fromkeys(k.strip() for k in raw.replace("\n", ",").split(",") if k.strip()))
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
@@ -44,17 +53,30 @@ class Settings(BaseSettings):
     odds_api_days_ahead: int = 3  # only spend credits on competitions with a fixture this soon
     odds_api_refresh_hours: float = 20.0  # at most one priced call per competition in this many hours
     odds_api_credit_reserve: int = 30  # stop pricing when the month's remaining credits fall below this
+    # Match day: a competition with a top pick kicking off within `odds_api_matchday_hours` is
+    # re-priced when that pick's odds are older than `odds_api_matchday_refresh_hours`, so the pick is
+    # not held back as stale. It only spends credits beyond `odds_api_daily_allowance` per day left
+    # in the month (kept for routine pricing) on top of the reserve.
+    odds_api_matchday_hours: float = 12.0
+    odds_api_matchday_refresh_hours: float = 6.0
+    odds_api_daily_allowance: int = 8
     api_football_key: SecretStr | None = None
     thesportsdb_api_key: str = "123"  # free test key; crests only
     provider_timeout_seconds: float = 20.0
     provider_max_retries: int = 3
 
-    # Gemini AI analysis (optional). Several keys may be given, separated by commas;
-    # requests rotate through them and skip keys that are rate-limited or rejected.
+    # AI match analysis (optional): providers are tried in this order, skipping any without keys.
+    ai_providers: str = "openai,gemini"
+    # OpenAI and Gemini keys: several may be given per provider, separated by commas; requests
+    # rotate through them and skip keys that are rate-limited or rejected.
+    openai_api_keys: SecretStr | None = None
+    # Tried in order; a model the account cannot use falls through to the next.
+    openai_models: str = "gpt-5-mini,gpt-4.1-mini"
+    openai_timeout_seconds: float = 180.0  # web search plus reasoning can take a while
     gemini_api_keys: SecretStr | None = None
     # Tried in order; a model the API reports as unavailable (404) falls through to the next.
     gemini_models: str = "gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest"
-    gemini_search_grounding: bool = True  # let Gemini search the web for team news
+    gemini_search_grounding: bool = True  # let the AI search the web for team news (either provider)
     gemini_timeout_seconds: float = 120.0
     # Scheduled analysis for fixtures kicking off within this many hours (0 disables it)
     gemini_auto_hours: int = 48
@@ -63,12 +85,23 @@ class Settings(BaseSettings):
 
     @property
     def gemini_key_list(self) -> list[str]:
-        raw = self.gemini_api_keys.get_secret_value() if self.gemini_api_keys else ""
-        return list(dict.fromkeys(k.strip() for k in raw.replace("\n", ",").split(",") if k.strip()))
+        return _keys(self.gemini_api_keys)
 
     @property
     def gemini_model_list(self) -> list[str]:
-        return [m.strip() for m in self.gemini_models.split(",") if m.strip()]
+        return _names(self.gemini_models)
+
+    @property
+    def openai_key_list(self) -> list[str]:
+        return _keys(self.openai_api_keys)
+
+    @property
+    def openai_model_list(self) -> list[str]:
+        return _names(self.openai_models)
+
+    @property
+    def ai_provider_list(self) -> list[str]:
+        return [n.lower() for n in _names(self.ai_providers)]
 
     # Competitions to track, by internal code (see app/ingestion/competitions.py)
     competitions: list[str] = [

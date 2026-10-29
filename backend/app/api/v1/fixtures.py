@@ -14,7 +14,7 @@ from app.db.models import (
     AvailabilityReport, Competition, Fixture, Lineup, Prediction, SourceRecord, Team, User,
 )
 from app.db.session import get_db
-from app.providers.gemini import GeminiUnavailable
+from app.providers.ai import AiUnavailable
 from app.services.ai_analysis import AiAnalysisService, analysis_out
 from app.schemas.api import FixtureAnalysis, FixtureOut, Page
 from app.services.analytics import head_to_head, odds_at, standings, summarise_form, team_recent
@@ -196,7 +196,7 @@ def create_ai_analysis(fixture_id: int, db: Session = Depends(get_db), user: Use
         row = svc.analyse(f, trigger="manual", requested_by=user.email)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
-    except GeminiUnavailable as exc:
-        raise HTTPException(503, "All Gemini API keys are busy or out of quota; try again later") from exc
+    except AiUnavailable as exc:
+        raise HTTPException(503, "All AI API keys are busy or out of quota; try again later") from exc
     audit(db, user.email, "ai_analysis.create", f"fixture:{f.id}", {"analysis_id": row.id, "status": row.status})
     return analysis_out(row)

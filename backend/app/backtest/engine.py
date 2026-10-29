@@ -104,41 +104,45 @@ def run_backtest(matches_by_comp: dict[str, list[BacktestMatch]], params: Backte
     oos_over: list[tuple[float, float, int]] = []  # (dc over, market over, hit)
     weights_history: list[dict] = []
 
-    for comp, matches in matches_by_comp.items():
-        matches = sorted(matches, key=lambda m: m.record.kickoff)
-        if not matches:
-            continue
-        suite = ModelSuite(params.suite, pool=comp)
-        cursor = 0
-        step = params.evaluate_from
-        while step < params.evaluate_to:
-            end = min(step + timedelta(days=params.step_days), params.evaluate_to)
+    # Competitions advance through time together: the ensemble weights at a step are learned from
+    # every competition's predictions of earlier steps only, never from another competition's future.
+    ordered = {comp: sorted(ms, key=lambda m: m.record.kickoff)
+               for comp, ms in sorted(matches_by_comp.items()) if ms}
+    suites = {comp: ModelSuite(params.suite, pool=comp) for comp in ordered}
+    cursors = dict.fromkeys(ordered, 0)
+    step = params.evaluate_from
+    while step < params.evaluate_to:
+        end = min(step + timedelta(days=params.step_days), params.evaluate_to)
+        weights = None
+        if len(oos_outcomes) >= params.min_oos_for_weights:
+            pool = LinearPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
+                                                  np.array(oos_outcomes))
+            weights = pool.to_dict()
+            if len(oos_over) >= params.min_oos_for_weights:
+                weights["_totals_market"] = _totals_weight(oos_over)
+            weights_history.append({"date": step.isoformat(), **weights})
+        for comp, matches in ordered.items():
+            suite, cursor = suites[comp], cursors[comp]
             while cursor < len(matches) and matches[cursor].record.kickoff < step:
                 suite.absorb(matches[cursor].record)
                 cursor += 1
+            cursors[comp] = cursor
             window = [m for m in matches[cursor:] if step <= m.record.kickoff < end]
-            if window:
-                suite.refit(step)
-                weights = None
-                if len(oos_outcomes) >= params.min_oos_for_weights:
-                    pool = LinearPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
-                                                          np.array(oos_outcomes))
-                    weights = pool.to_dict()
-                    if len(oos_over) >= params.min_oos_for_weights:
-                        weights["_totals_market"] = _totals_weight(oos_over)
-                    weights_history.append({"date": step.isoformat(), **weights})
-                for m in window:
-                    row = _predict_one(suite, m, comp, weights, params, bets)
-                    if row is None:
-                        continue
-                    rows.append(row)
-                    if all(c in row["components"] for c in COMPONENTS_1X2):
-                        for c in COMPONENTS_1X2:
-                            oos[c].append(np.array(row["components"][c]))
-                        oos_outcomes.append(row["outcome"])
-                    if row.get("dc_over") is not None and row.get("market_over") is not None:
-                        oos_over.append((row["dc_over"], row["market_over"], row["over_hit"]))
-            step = end
+            if not window:
+                continue
+            suite.refit(step)
+            for m in window:
+                row = _predict_one(suite, m, comp, weights, params, bets)
+                if row is None:
+                    continue
+                rows.append(row)
+                if all(c in row["components"] for c in COMPONENTS_1X2):
+                    for c in COMPONENTS_1X2:
+                        oos[c].append(np.array(row["components"][c]))
+                    oos_outcomes.append(row["outcome"])
+                if row.get("dc_over") is not None and row.get("market_over") is not None:
+                    oos_over.append((row["dc_over"], row["market_over"], row["over_hit"]))
+        step = end
 
     return summarise(rows, bets, oos, oos_outcomes, oos_over, weights_history, params)
 

@@ -1,4 +1,4 @@
-"""AI match analysis: Gemini reads the platform's own evidence for a fixture, searches
+"""AI match analysis: an LLM (OpenAI or Gemini, see app.providers.ai) reads the platform's own evidence for a fixture, searches
 the web for current team news, and writes a structured narrative.
 
 The output is advisory. It is stored and shown next to the model, but it never
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import Settings
 from app.db.models import AiAnalysis, Fixture, Prediction
-from app.providers.gemini import GeminiClient, GeminiError, GeminiUnavailable, get_gemini
+from app.providers.ai import AiClient, AiError, AiUnavailable, get_ai
 from app.services.analytics import head_to_head, standings, summarise_form, team_recent
 from app.services.top_picks import top_picks
 
@@ -35,7 +35,7 @@ FORMATION = re.compile(r"[1-6](-[1-6]){1,4}")
 
 SYSTEM = (
     "You are a careful football analyst supporting a statistical prediction platform. "
-    "You receive the platform's model output and evidence for one upcoming match. Use Google Search to find "
+    "You receive the platform's model output and evidence for one upcoming match. Search the web to find "
     "current, relevant information the model cannot see: injuries, suspensions, expected lineups, manager "
     "changes, fixture congestion, motivation (title race, relegation, cup priorities), travel and weather. "
     "Rules: only report news you actually found and say how solid it is; never invent players, quotes or "
@@ -161,7 +161,7 @@ def _lineup(value: object) -> dict | None:
 
 
 def normalise(text: str) -> dict:
-    """Validate Gemini's JSON into the stored shape. Unparseable answers are kept as plain text."""
+    """Validate the model's JSON into the stored shape. Unparseable answers are kept as plain text."""
     data = _extract_json(text)
     if data is None:
         return {"summary": _s(text, 4000), "structured": False, "key_factors": [], "team_news": [], "risks": [],
@@ -203,10 +203,10 @@ def analysis_out(a: AiAnalysis) -> dict:
 
 
 class AiAnalysisService:
-    def __init__(self, db: Session, settings: Settings, client: GeminiClient | None = None) -> None:
+    def __init__(self, db: Session, settings: Settings, client: AiClient | None = None) -> None:
         self.db = db
         self.settings = settings
-        self.client = client or get_gemini()
+        self.client = client or get_ai()
 
     @property
     def configured(self) -> bool:
@@ -223,7 +223,7 @@ class AiAnalysisService:
         """Analyse the fixture's latest prediction. Reuses a successful analysis of the same
         prediction snapshot instead of spending quota on an identical request.
 
-        Raises ValueError if the fixture cannot be analysed and GeminiUnavailable when no key can serve it.
+        Raises ValueError if the fixture cannot be analysed and AiUnavailable when no key can serve it.
         """
         now = now or datetime.now(timezone.utc)
         if fixture.kickoff_utc <= now or fixture.status != "scheduled":
@@ -239,18 +239,18 @@ class AiAnalysisService:
 
         prompt = build_prompt(self.db, fixture, prediction, now)
         row = AiAnalysis(fixture_id=fixture.id, prediction_id=prediction.id, created_at=now, trigger=trigger,
-                         requested_by=requested_by, provider="gemini", sources=[], search_queries=[])
+                         requested_by=requested_by, sources=[], search_queries=[])
         try:
             result = self.client.generate(prompt, system=SYSTEM, search=self.settings.gemini_search_grounding)
-        except GeminiUnavailable:
+        except AiUnavailable:
             raise  # nothing was attempted successfully; keep quota problems out of the history
-        except GeminiError as exc:
-            row.status, row.error = "failed", str(exc)[:1000]
+        except AiError as exc:
+            row.status, row.provider, row.error = "failed", exc.provider or "unknown", str(exc)[:1000]
         else:
             content = normalise(result.text)
             content["basis"] = {"prediction_id": prediction.id, "lineup_status": prediction.lineup_status,
                                 "model_1x2": (prediction.markets or {}).get("1x2")}
-            row.status, row.model, row.key_slot = "ok", result.model, result.key_slot
+            row.status, row.provider, row.model, row.key_slot = "ok", result.provider, result.model, result.key_slot
             row.content, row.sources, row.search_queries = content, result.sources[:20], result.search_queries[:10]
         self.db.add(row)
         self.db.commit()
@@ -272,7 +272,7 @@ class AiAnalysisService:
         s = self.settings
         summary: dict = {"analysed": 0, "failed": 0, "skipped": 0}
         if not self.configured or s.gemini_auto_hours <= 0:
-            return {**summary, "note": "Gemini not configured or scheduled analysis disabled"}
+            return {**summary, "note": "AI analysis not configured or scheduled analysis disabled"}
         fixtures = list(self.db.scalars(select(Fixture).where(
             Fixture.status == "scheduled", Fixture.kickoff_utc > now,
             Fixture.kickoff_utc < now + timedelta(hours=s.gemini_auto_hours)).order_by(Fixture.kickoff_utc)))
@@ -288,7 +288,7 @@ class AiAnalysisService:
                 continue
             try:
                 row = self.analyse(f, trigger="scheduled", now=now)
-            except GeminiUnavailable as exc:
+            except AiUnavailable as exc:
                 summary["stopped"] = str(exc)  # every key is cooling down; try again next cycle
                 break
             except Exception:  # noqa: BLE001 - one fixture must not stop the batch

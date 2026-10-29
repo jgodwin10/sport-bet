@@ -2,14 +2,16 @@
 # Replaces Celery beat while the API runs with TASK_MODE=inline (no worker).
 #
 # Repo secrets (Settings -> Secrets and variables -> Actions): DATABASE_URL (Supabase session
-# pooler URI) and, optionally, GEMINI_API_KEYS, THE_ODDS_API_KEY, FOOTBALL_DATA_ORG_API_KEY,
+# pooler URI) and, optionally, OPENAI_API_KEYS, GEMINI_API_KEYS, THE_ODDS_API_KEY, FOOTBALL_DATA_ORG_API_KEY,
 # API_FOOTBALL_KEY (cup history).
 #
 # Budgets: private repos get 2,000 Actions minutes/month, so the frequent run is every 2 hours
 # (~360 runs). The Odds API free tier is 500 credits/month: its cup event lists are free, odds
 # (2 markets x 1 region = 2 credits) refresh at most once per 20 hours per competition, only for
 # cups with a tie in the next 3 days and leagues with an unpriced fixture in the next 3 days, and
-# stop at a 30-credit reserve; cup scores (2 credits) are fetched only while a played tie lacks a result.
+# stop at a 30-credit reserve. On match day a competition with a top pick whose odds are over 6h old
+# is re-priced (at most every 6h), but only while 8 credits per remaining day of the month are left
+# for the routine pricing. Cup scores (2 credits) are fetched only while a played tie lacks a result.
 name: Scheduled jobs
 
 on:
@@ -32,6 +34,7 @@ env:
   TASK_MODE: inline
   THE_ODDS_API_REGIONS: uk
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  OPENAI_API_KEYS: ${{ secrets.OPENAI_API_KEYS }}
   GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
   THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
   FOOTBALL_DATA_ORG_API_KEY: ${{ secrets.FOOTBALL_DATA_ORG_API_KEY }}
@@ -86,5 +89,5 @@ jobs:
         if: ${{ !cancelled() }}
         run: python -m app.cli predict
       - name: AI analysis
-        if: ${{ !cancelled() && env.GEMINI_API_KEYS != '' }}
+        if: ${{ !cancelled() && (env.OPENAI_API_KEYS != '' || env.GEMINI_API_KEYS != '') }}
         run: python -m app.cli ai-analysis

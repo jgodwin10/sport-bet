@@ -83,20 +83,23 @@ Crests are downloaded once in 100px/200px renditions, stored in PostgreSQL (`tea
 and the CSP stays `img-src 'self'`. Club crests are trademarks of their clubs and are shown for identification only.
 Refresh them with `python -m app.cli ingest-logos` (it also runs daily).
 
-### AI analysis (Gemini)
+### AI analysis (OpenAI or Gemini)
 
-With `GEMINI_API_KEYS` set (one or more comma-separated keys), each upcoming match gets an **AI analysis**
-card on its Summary tab. Gemini receives the platform's own evidence (model probabilities, expected goals,
-the explanation list, form, table, head-to-head). It also uses Google Search grounding to look for things
+With `OPENAI_API_KEYS` and/or `GEMINI_API_KEYS` set (one or more comma-separated keys each), each upcoming
+match gets an **AI analysis** card on its Summary tab. Providers are tried in `AI_PROVIDERS` order
+(default `openai,gemini`): one without keys is skipped, and one whose keys are all rate-limited or out of
+quota hands the request to the next. The model receives the platform's own evidence (model probabilities, expected goals,
+the explanation list, form, table, head-to-head). It also searches the web (OpenAI's web search tool or Gemini's Google Search grounding) to look for things
 the model cannot see: injuries, expected lineups, manager changes, motivation, congestion and weather. It
 returns a structured write-up: summary, key factors, team news labelled confirmed/reported/rumour, risks,
 whether the news changes the model's picture, and its own 1X2 view. The sources it cites are listed.
 
 - **Key rotation:** requests start at the next key in round-robin order. A key that gets a 429 is skipped
   for the server-suggested delay (60 s by default, or 1 h when the daily quota is exhausted). An invalid or
-  forbidden key is skipped for 6 h, and a 5xx or network error for 30 s. Keys go only in the `x-goog-api-key`
-  header and are never logged. `/system/health` and Settings show each key's status by slot number.
-- **Model fallback:** `GEMINI_MODELS` is tried in order, and a model that returns 404 falls through to the next.
+  forbidden key is skipped for 6 h, and a 5xx or network error for 30 s. An OpenAI key out of billing quota
+  is skipped for 1 h. Keys go only in request headers and are never logged. `/system/health` and Settings show each key's status by slot number.
+- **Model fallback:** `OPENAI_MODELS` and `GEMINI_MODELS` are tried in order, and a model the account cannot
+  use (404, or no web search support on OpenAI) falls through to the next.
 - **When it runs:** on demand from the match page (signed-in users), from `python -m app.cli ai-analysis
   [--fixtures ID ...]` or the admin "AI analysis" button, and on a schedule for fixtures within
   `GEMINI_AUTO_HOURS`, at most `GEMINI_AUTO_MAX_PER_RUN` per run. A fixture is re-analysed once its

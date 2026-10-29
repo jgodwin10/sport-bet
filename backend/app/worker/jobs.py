@@ -143,7 +143,7 @@ def run_predictions(trigger: str = "scheduled", fixture_ids: list[int] | None = 
 
 
 def ai_analysis(fixture_ids: list[int] | None = None) -> dict:
-    """Gemini analysis for upcoming fixtures (or the given ones) whose analysis is missing or stale."""
+    """AI analysis for upcoming fixtures (or the given ones) whose analysis is missing or stale."""
     with session_factory()() as db:
         svc = AiAnalysisService(db, get_settings())
         if not fixture_ids:
