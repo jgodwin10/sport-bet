@@ -3,10 +3,14 @@ All data is SYNTHETIC."""
 
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 from sqlalchemy import event, func, select
 
+from app.core.config import Settings
 from app.db.models import DataConflict, Fixture, MatchResult, OddsSnapshot, SourceRecord, Team
+from app.ingestion.competitions import COMPETITIONS
+from app.ingestion.service import IngestionService
 from app.ingestion.store import Store
 from app.ingestion.teams import TeamResolver, normalize
 from app.providers.base import NormalizedFixture, NormalizedOdds
@@ -72,6 +76,18 @@ def test_curated_alias_maps_to_canonical_team(db):
     assert resolver.resolve("football_data_org", "Manchester United FC", "ENG-1") == man_utd
     assert resolver.resolve("the_odds_api", "Wolverhampton Wanderers", "ENG-1") == db.scalar(
         select(Team.id).where(Team.name == "Wolves"))
+
+
+def test_curated_alias_maps_a_second_spelling_from_the_same_provider(db):
+    # The Odds API calls the club "SC Braga" in its Europa League feed and "Braga" in its league feed
+    Store(db).ingest_fixtures(make_batch([_fx(home="Sp Braga", away="Porto")]))
+    resolver = TeamResolver(db)
+    braga = db.scalar(select(Team.id).where(Team.name == "Sp Braga"))
+    assert resolver.resolve("the_odds_api", "SC Braga", "UEFA-EL") == braga
+    assert resolver.resolve("the_odds_api", "Braga", "POR-1") == braga
+    porto = db.scalar(select(Team.id).where(Team.name == "Porto"))
+    assert resolver.resolve("the_odds_api", "Porto", "UEFA-CL") == porto
+    assert resolver.resolve("the_odds_api", "FC Porto", "POR-1") == porto
 
 
 def test_higher_trust_kickoff_wins_and_conflict_is_recorded(db):
@@ -151,3 +167,56 @@ def _cup_fx(provider, competition_code, kickoff=KICKOFF, home="Alpha", away="Bet
     return NormalizedFixture(provider=provider, provider_fixture_id=kw.pop("pid", None),
                              competition_code=competition_code, season_label="2026-2027", home_name=home,
                              away_name=away, kickoff_utc=kickoff, status="scheduled", **kw)
+
+
+class _FakeOddsApi:
+    """Prices whatever the test hands it and counts the priced calls."""
+
+    name, configured = "the_odds_api", True
+
+    def __init__(self, fixtures, remaining=400):
+        self.fixtures, self.remaining, self.calls = fixtures, remaining, []
+
+    def odds(self, code):
+        self.calls.append(code)
+        self.remaining -= 2
+        batch = make_batch([f for f in self.fixtures if f.competition_code == code], provider="the_odds_api",
+                           trust=80, resource=f"/sports/{COMPETITIONS[code].odds_api}/odds")
+        batch.payload_hash += str(len(self.calls))
+        batch.meta = {"requests_remaining": str(self.remaining)}
+        return batch
+
+
+def _odds_service(db, odds_api, **settings):
+    s = Settings(competitions=["ENG-1", "ENG-LC"], **settings)
+    return IngestionService(db, SimpleNamespace(odds_api=odds_api), s)
+
+
+def test_league_is_priced_from_odds_api_only_while_a_fixture_lacks_odds(db):
+    soon = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=2)
+    Store(db).ingest_fixtures(make_batch([_fx(kickoff=soon)]))
+    db.commit()
+    price = [NormalizedOdds("b365", "Bet365", "1x2", sel, o, "pre_match", soon - timedelta(days=3))
+             for sel, o in (("home", 2.1), ("draw", 3.4), ("away", 3.6))]
+    api = _FakeOddsApi([_fx(provider="the_odds_api", kickoff=soon, pid="e1", odds=price)])
+
+    first = _odds_service(db, api).odds()
+    assert api.calls == ["ENG-1"] and first["ENG-1"]["odds"] == 3 and first["credits_remaining"] == 398
+    assert first["ENG-LC"].startswith("skipped: no fixture")
+    # The fixture now has odds: no further credits are spent on the league
+    assert "has odds" in _odds_service(db, api).odds()["ENG-1"] and api.calls == ["ENG-1"]
+
+
+def test_odds_api_pricing_is_throttled_and_keeps_a_credit_reserve(db):
+    soon = datetime.now(timezone.utc).replace(microsecond=0) + timedelta(days=1)
+    Store(db).ingest_fixtures(make_batch([_fx(kickoff=soon), _cup_fx("api_football", "ENG-LC", soon, stage="cup")]))
+    db.commit()
+    api = _FakeOddsApi([], remaining=31)  # prices nothing, so both stay unpriced
+
+    first = _odds_service(db, api).odds()
+    assert api.calls == ["ENG-1"] and "29 credits left" in first["ENG-LC"]
+    again = _odds_service(db, api).odds()
+    assert "priced in the last 20h" in again["ENG-1"] and api.calls == ["ENG-1"]
+    # The reserve carries over to later runs through the stored response
+    assert "29 credits left" in _odds_service(db, api, odds_api_refresh_hours=0).odds()["ENG-1"]
+    assert api.calls == ["ENG-1"]

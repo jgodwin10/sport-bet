@@ -7,7 +7,7 @@ from functools import lru_cache
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from app.ingestion.competitions import CUPS
+from app.ingestion.competitions import COMPETITIONS, CUPS
 
 
 class Settings(BaseSettings):
@@ -36,10 +36,14 @@ class Settings(BaseSettings):
     football_data_org_api_key: SecretStr | None = None
     the_odds_api_key: SecretStr | None = None
     the_odds_api_regions: str = "uk,eu"
-    # Competitions priced from The Odds API (each refresh costs credits). Leagues already get
-    # odds from football-data.co.uk's weekly file; cups have no other odds source.
-    odds_api_competitions: list[str] = CUPS
+    # Competitions priced from The Odds API (each refresh costs credits). Cups have no other odds
+    # source. Leagues get odds from football-data.co.uk's weekly file, which only covers the next
+    # round once it is published (Tuesdays and Fridays), so a league is priced here only while a
+    # fixture in the window below has no odds at all.
+    odds_api_competitions: list[str] = [c.code for c in COMPETITIONS.values() if c.odds_api]
     odds_api_days_ahead: int = 3  # only spend credits on competitions with a fixture this soon
+    odds_api_refresh_hours: float = 20.0  # at most one priced call per competition in this many hours
+    odds_api_credit_reserve: int = 30  # stop pricing when the month's remaining credits fall below this
     api_football_key: SecretStr | None = None
     thesportsdb_api_key: str = "123"  # free test key; crests only
     provider_timeout_seconds: float = 20.0
@@ -49,7 +53,7 @@ class Settings(BaseSettings):
     # requests rotate through them and skip keys that are rate-limited or rejected.
     gemini_api_keys: SecretStr | None = None
     # Tried in order; a model the API reports as unavailable (404) falls through to the next.
-    gemini_models: str = "gemini-3.8-flash,gemini-2.5-flash"
+    gemini_models: str = "gemini-3.8-flash,gemini-flash-latest,gemini-flash-lite-latest"
     gemini_search_grounding: bool = True  # let Gemini search the web for team news
     gemini_timeout_seconds: float = 120.0
     # Scheduled analysis for fixtures kicking off within this many hours (0 disables it)

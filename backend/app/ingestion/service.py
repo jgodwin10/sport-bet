@@ -7,12 +7,12 @@ import logging
 from collections.abc import Callable
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
-from app.db.models import Competition, Fixture, IngestionJob, ProviderMapping, Season
+from app.db.models import Competition, Fixture, IngestionJob, OddsSnapshot, ProviderMapping, Season, SourceRecord
 from app.engine.elo import season_of
 from app.ingestion.competitions import COMPETITIONS
 from app.ingestion.store import Store
@@ -23,6 +23,13 @@ from app.providers.registry import Providers
 log = logging.getLogger(__name__)
 
 HISTORY_BOOKMAKERS = {"avg", "max", "ps", "b365", "bfe"}
+
+
+def _credits(meta: dict, default: int | None) -> int | None:
+    try:
+        return int(meta["requests_remaining"])
+    except (KeyError, TypeError, ValueError):
+        return default
 
 
 class JobAlreadyRan(RuntimeError):
@@ -129,12 +136,14 @@ class IngestionService:
                    Fixture.kickoff_utc.between(now - timedelta(days=3), now - timedelta(hours=2)))
             .limit(1)) is not None
 
-    def _upcoming_in(self, code: str, now: datetime, days: int) -> bool:
-        return self.db.scalar(
-            select(Fixture.id).join(Competition, Competition.id == Fixture.competition_id)
-            .where(Competition.code == code, Fixture.status == "scheduled",
-                   Fixture.kickoff_utc.between(now, now + timedelta(days=days)))
-            .limit(1)) is not None
+    def _upcoming_in(self, code: str, now: datetime, days: int, unpriced: bool = False) -> bool:
+        """A scheduled fixture kicks off in the next `days` days (and, if `unpriced`, has no odds yet)."""
+        q = (select(Fixture.id).join(Competition, Competition.id == Fixture.competition_id)
+             .where(Competition.code == code, Fixture.status == "scheduled",
+                    Fixture.kickoff_utc.between(now, now + timedelta(days=days))))
+        if unpriced:
+            q = q.where(~exists().where(OddsSnapshot.fixture_id == Fixture.id, OddsSnapshot.kind == "pre_match"))
+        return self.db.scalar(q.limit(1)) is not None
 
     def _cups(self, wanted: set[str], now: datetime) -> dict:
         """Cup fixtures from The Odds API's free event list, and recent cup results (2 credits a
@@ -193,22 +202,54 @@ class IngestionService:
         summary: dict[str, object] = {}
         if not self.providers.odds_api.configured:
             return {"the_odds_api": "not configured; using odds from football-data.co.uk weekly file"}
+        s = self.settings
         now = datetime.now(timezone.utc)
-        priced = set(self.settings.odds_api_competitions)
-        for code in self.settings.competitions:
+        priced = set(s.odds_api_competitions)
+        remaining = self._credits_remaining(now - timedelta(hours=24))
+        for code in s.competitions:
             if code not in priced or not COMPETITIONS[code].odds_api:
                 continue
-            if not self._upcoming_in(code, now, self.settings.odds_api_days_ahead):
-                summary[code] = f"skipped: no fixture in the next {self.settings.odds_api_days_ahead} days"
+            if COMPETITIONS[code].format == "cup":
+                if not self._upcoming_in(code, now, s.odds_api_days_ahead):
+                    summary[code] = f"skipped: no fixture in the next {s.odds_api_days_ahead} days"
+                    continue
+            elif not self._upcoming_in(code, now, s.odds_api_days_ahead, unpriced=True):
+                summary[code] = f"skipped: every fixture in the next {s.odds_api_days_ahead} days has odds"
+                continue
+            if self._priced_since(code, now - timedelta(hours=s.odds_api_refresh_hours)):
+                summary[code] = f"skipped: priced in the last {s.odds_api_refresh_hours:g}h"
+                continue
+            if remaining is not None and remaining < s.odds_api_credit_reserve:
+                summary[code] = f"skipped: {remaining} credits left (reserve {s.odds_api_credit_reserve})"
                 continue
             try:
                 batch = self.providers.odds_api.odds(code)
             except (ProviderError, ValueError) as exc:
                 summary[code] = {"error": str(exc)}
                 continue
+            remaining = _credits(batch.meta, remaining)
             summary[code] = Store(self.db).ingest_fixtures(batch).as_dict()
             self.db.commit()
+        if remaining is not None:
+            summary["credits_remaining"] = remaining
         return summary
+
+    def _credits_remaining(self, since: datetime) -> int | None:
+        """Credits left as of the latest Odds API response stored after `since` (None if unknown)."""
+        meta = self.db.scalar(
+            select(SourceRecord.meta).where(SourceRecord.provider == self.providers.odds_api.name,
+                                            SourceRecord.retrieved_at > since)
+            .order_by(SourceRecord.retrieved_at.desc(), SourceRecord.id.desc()).limit(1))
+        return _credits(meta or {}, None)
+
+    def _priced_since(self, code: str, since: datetime) -> bool:
+        """The Odds API priced this competition after `since` (a priced call is a /odds resource)."""
+        return self.db.scalar(
+            select(SourceRecord.id).where(
+                SourceRecord.provider == self.providers.odds_api.name,
+                SourceRecord.resource == f"/sports/{COMPETITIONS[code].odds_api}/odds",
+                SourceRecord.retrieved_at > since)
+            .limit(1)) is not None
 
     def team_news(self, fixture: Fixture) -> dict:
         """Injuries and lineups for one fixture (requires API-Football)."""

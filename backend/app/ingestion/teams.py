@@ -67,6 +67,7 @@ CURATED_ALIASES: dict[str, list[str]] = {
     "Hearts": ["Heart of Midlothian"],
     "Sp Lisbon": ["Sporting Lisbon", "Sporting CP"],
     "Sp Braga": ["Braga", "SC Braga", "Sporting Braga"],
+    "Porto": ["FC Porto"],
     "PSV Eindhoven": ["PSV"],
 }
 
@@ -141,6 +142,14 @@ class TeamResolver:
         hit = self.db.scalar(select(TeamAlias.team_id).where(TeamAlias.provider == provider, TeamAlias.alias == name))
         if hit:
             return hit
+        if (canon := _CURATED_INDEX.get(norm)) is not None:
+            # A curated alias is an explicit mapping, so it may name a team this provider already
+            # knows by another name (The Odds API spells some teams differently per competition).
+            curated = set(self.db.scalars(select(TeamAlias.team_id).where(TeamAlias.normalized == canon)))
+            if len(curated) == 1:
+                team_id = curated.pop()
+                self._alias(team_id, provider, name, norm, provider_team_id)
+                return team_id
         taken = self._taken(provider)
 
         targets = {norm, _CURATED_INDEX.get(norm, norm)}

@@ -7,18 +7,19 @@
 #
 # Budgets: private repos get 2,000 Actions minutes/month, so the frequent run is every 2 hours
 # (~360 runs). The Odds API free tier is 500 credits/month: its cup event lists are free, odds
-# (2 markets x 1 region = 2 credits) refresh once a day and only for cups with a tie in the next
-# 3 days, and cup scores (2 credits) are fetched only while a played tie lacks a result.
+# (2 markets x 1 region = 2 credits) refresh at most once per 20 hours per competition, only for
+# cups with a tie in the next 3 days and leagues with an unpriced fixture in the next 3 days, and
+# stop at a 30-credit reserve; cup scores (2 credits) are fetched only while a played tie lacks a result.
 name: Scheduled jobs
 
 on:
   schedule:
     - cron: "15 */2 * * *"  # fixtures, settlement, predictions, AI analysis
-    - cron: "30 5 * * *"    # daily: history, odds, crests, then predictions again
+    - cron: "30 5 * * *"    # daily: history, crests, then the frequent jobs
   workflow_dispatch:
     inputs:
       daily:
-        description: Also run the daily jobs (history, odds, crests)
+        description: Also run the daily jobs (history, crests)
         type: boolean
         default: false
 
@@ -44,7 +45,7 @@ jobs:
       run:
         working-directory: backend
     env:
-      DAILY: ${{ github.event.schedule == '30 5 * * *' || inputs.daily }}
+      DAILY: ${{ github.event.schedule == '30 5 * * *' || inputs.daily == true }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -54,7 +55,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - run: pip install -r requirements.txt
 
-      # Daily steps first so the predictions below use the new results and odds.
+      # Daily steps first so the predictions below use the new results.
       # History and crests save as they go (per season file / per team), so a large backfill is
       # capped with `timeout` and the next daily run picks up where it stopped; hitting the cap
       # (exit 124) is a warning, not a failure. `timeout` kills Python itself: a step's
@@ -64,9 +65,6 @@ jobs:
         if: ${{ !cancelled() && env.DAILY == 'true' }}
         timeout-minutes: 22
         run: timeout 20m python -m app.cli ingest-history || { [ $? -eq 124 ] && echo "::warning::History backfill hit its 20-minute cap; it continues on the next daily run"; }
-      - name: Refresh odds
-        if: ${{ !cancelled() && env.DAILY == 'true' && env.THE_ODDS_API_KEY != '' }}
-        run: python -m app.cli refresh-odds
       - name: Refresh crests
         if: ${{ !cancelled() && env.DAILY == 'true' }}
         timeout-minutes: 12
@@ -76,6 +74,11 @@ jobs:
       - name: Fetch fixtures
         if: ${{ !cancelled() }}
         run: python -m app.cli ingest-upcoming
+      # Every run, not just the daily one: GitHub often delays or drops scheduled runs, and the
+      # service itself limits The Odds API to one priced call per competition per 20 hours.
+      - name: Refresh odds
+        if: ${{ !cancelled() && env.THE_ODDS_API_KEY != '' }}
+        run: python -m app.cli refresh-odds
       - name: Settle results
         if: ${{ !cancelled() }}
         run: python -m app.cli settle
