@@ -6,31 +6,36 @@ it says **"No suitable bet identified"** whenever the evidence is inadequate, an
 never places bets.
 
 > **Current evidence (see "What the backtests show"):** on real data the ensemble
-> is well calibrated but does **not** beat the bookmaker market, and simulated
-> betting has an ROI interval that spans zero. No betting edge has been
+> does **not** beat the bookmaker market; only over/under 2.5 passes validation, and
+> its simulated betting has an ROI interval that spans zero. No betting edge has been
 > demonstrated. The platform reports this rather than hiding it.
 
-## What the backtests show (real data, run 2026-10-25)
+## What the backtests show (real data, run 2026-10-29)
 
-Walk-forward over **7,390 matches** in ENG-1, ENG-2, GER-1, ESP-1, ITA-1 and FRA-1, from 2023-08-01 to 2026-10-25,
-with weekly refits and pre-match odds from football-data.co.uk:
+Walk-forward over **16,330 matches** in all 22 tracked leagues, from 2024-07-01 to 2026-10-29 (2023-24 as the
+first training season), with weekly refits and pre-match odds from football-data.co.uk. All leagues advance
+through time together, so the ensemble weights at each step come only from earlier predictions:
 
-| 1X2 model | Log loss | Brier | Accuracy |
-|---|---|---|---|
-| Market (Shin, margin removed) | **0.9808** | **0.5849** | 52.4% |
-| Ensemble | 0.9845 | 0.5873 | 52.2% |
-| Dixon-Coles | 1.0042 | 0.6003 | 50.5% |
-| Elo | 1.0047 | 0.6008 | 50.7% |
-| Logistic feature model | 1.0096 | 0.6030 | 50.8% |
-| Base rates | 1.0748 | 0.6505 | 43.2% |
+| 1X2 model | Log loss | Accuracy |
+|---|---|---|
+| Market (Shin, margin removed) | **0.9983** | 50.9% |
+| Ensemble | 1.0004 | 50.7% |
+| Dixon-Coles | 1.0221 | 49.0% |
+| Elo | 1.0224 | 49.1% |
+| Logistic feature model | 1.0300 | 48.8% |
+| Base rates | 1.0750 | 43.4% |
 
-- Learned ensemble weights: **market 0.87**, with about 0.04 each for Dixon-Coles, Elo and the feature model. The data says the
+- Learned ensemble weights: **market 0.90**, about 0.03 each for Dixon-Coles, Elo and the feature model. The
   statistical models add very little information beyond bookmaker prices.
-- Simulated flat-stake betting under the default rules: 603 bets, **ROI −9.5%**, 90% CI **[−18.6%, −0.4%]**, mean
-  CLV +0.5%. `edge_demonstrated = false`.
-- Calibration: O/U 2.5 passes the calibration test. 1X2 shows a small but statistically detectable miscalibration
-  at this sample size (draw p = 0.04), so 1X2 is not "validated" and no 1X2 selection can qualify.
-- On the EPL alone (1,210 matches), ROI was −0.6% with a CI of roughly ±11%. That is indistinguishable from zero.
+- Calibration: O/U 2.5 passes (p = 0.30) and is **validated**, so over/under 2.5 selections can qualify. 1X2
+  shows a small but detectable draw miscalibration (p = 0.04), so 1X2 is not validated and no 1X2 selection can
+  qualify. That is the right call: simulated 1X2 bets lost money (446 bets, ROI −13.4%, 90% CI [−25.1%, −1.5%]).
+- O/U 2.5 bets under the default rules: 185 bets, ROI +6.1%, 90% CI [−5.4%, +17.5%], mean CLV +1.5%. Positive but
+  not significant: `edge_demonstrated = false`.
+
+Run it with **Actions → Backtest and deploy** (or `python -m app.cli backtest --competitions leagues --from ...
+--to ... --deploy`). Deploying sets the weights and validated markets that live predictions use; cups have no
+historical odds, so they are not backtested and their selections stay on the watchlist.
 
 The tooling is there to find an edge if one exists, for example with better features or lineup data via
 API-Football. With these inputs there is none, and the platform shows "no bet" accordingly.
