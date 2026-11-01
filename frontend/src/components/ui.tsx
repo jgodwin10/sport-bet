@@ -48,15 +48,15 @@ export function Card({ title, subtitle, action, children, className, flush, info
   return (
     <section className={cx("card", className)}>
       {(title || action) && (
-        <header className="flex items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
+        <header className="flex items-start justify-between gap-3 px-4 sm:px-6 pt-5 sm:pt-6">
           <div className="min-w-0">
-            {title && <h2 className="text-[15px] font-bold flex items-center gap-1.5">{title}{info && <InfoTip text={info} />}</h2>}
+            {title && <h2 className="text-[17px] font-bold flex items-center gap-1.5">{title}{info && <InfoTip text={info} />}</h2>}
             {subtitle && <p className="mt-0.5 text-[13px] text-ink-3">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
         </header>
       )}
-      <div className={cx(flush ? "pt-2" : "p-4 sm:p-5", title && !flush && "pt-3 sm:pt-4")}>{children}</div>
+      <div className={cx(flush ? "pt-3" : "p-4 sm:p-6", title && !flush && "pt-3 sm:pt-4")}>{children}</div>
     </section>
   );
 }
@@ -75,7 +75,7 @@ const TONE_TEXT: Record<Tone, string> = { neutral: "text-ink", pos: "text-pos", 
 
 export function StatTile({ label, value, hint, tone, info }: { label: string; value: ReactNode; hint?: ReactNode; tone?: Tone; info?: string }) {
   return (
-    <div className="card px-4 py-3.5 sm:px-5 sm:py-4">
+    <div className="card px-4 py-4 sm:px-5 sm:py-5">
       <div className="label flex items-center gap-1 min-w-0"><span className="truncate">{label}</span>{info && <InfoTip text={info} />}</div>
       <div className={cx("mt-1.5 text-[22px] sm:text-[26px] font-extrabold num tracking-[-0.02em] leading-tight break-words", TONE_TEXT[tone ?? "neutral"])}>{value}</div>
       {hint && <div className="mt-0.5 text-xs text-ink-3">{hint}</div>}
@@ -241,8 +241,8 @@ export function ProbChips({ p }: { p: { home?: number; draw?: number; away?: num
     <div className="grid grid-cols-3 gap-1" role="img" aria-label={items.map(([k, v]) => `${k} ${pct(v, 0)}`).join(", ")}>
       {items.map(([k, v]) => (
         <span key={k} className={cx("flex flex-col items-center rounded-lg py-1.5 ring-1 ring-inset",
-                                    v === max ? "bg-brand/10 text-brand ring-brand/30" : "bg-bg/40 text-ink-3 ring-line")}>
-          <span className={cx("text-[10px] font-bold leading-none", v === max ? "text-brand/70" : "text-ink-4")}>{k}</span>
+                                    v === max ? "bg-brand/20 text-brand-2 ring-brand/45" : "bg-bg/40 text-ink-3 ring-white/[0.06]")}>
+          <span className={cx("text-[10px] font-bold leading-none", v === max ? "text-brand-2/70" : "text-ink-4")}>{k}</span>
           <span className={cx("mt-1 text-[13px] num leading-none", v === max ? "font-extrabold" : "font-semibold")}>{pct(v, 0)}</span>
         </span>
       ))}
@@ -250,13 +250,48 @@ export function ProbChips({ p }: { p: { home?: number; draw?: number; away?: num
   );
 }
 
-export function FormPills({ seq, max = 5, size = 20 }: { seq: string; max?: number; size?: number }) {
+/** Last results as solid circles: win teal, loss red, draw light grey. */
+export function FormPills({ seq, max = 5, size = 24 }: { seq: string; max?: number; size?: number }) {
   return (
-    <span className={cx("inline-flex", size < 16 ? "gap-0.5" : "gap-1")} aria-label={`Last results: ${seq.slice(0, max)}`}>
+    <span className={cx("inline-flex", size < 18 ? "gap-0.5" : size <= 20 ? "gap-1" : "gap-1.5")} aria-label={`Last results: ${seq.slice(0, max)}`}>
       {seq.split("").slice(0, max).map((r, i) => (
-        <span key={i} style={{ width: size, height: size, fontSize: Math.max(9, size * 0.5) }}
-              className={cx("grid place-items-center rounded-md font-semibold",
-                r === "W" ? "bg-pos/15 text-pos" : r === "L" ? "bg-neg/15 text-neg" : "bg-subtle text-ink-3")}>{r}</span>
+        <span key={i} style={{ width: size, height: size, fontSize: Math.max(9, size * 0.46) }}
+              className={cx("grid place-items-center rounded-full font-bold shadow-[inset_0_1px_0_rgb(255_255_255/0.25)]",
+                r === "W" ? "bg-pos text-white" : r === "L" ? "bg-neg text-white" : "bg-[#e2e8f0] text-[#334155]")}>{r}</span>
+      ))}
+    </span>
+  );
+}
+
+/** Elongated hexagon badge, e.g. for a score or a price. */
+export function Hex({ children, className }: { children: ReactNode; className?: string }) {
+  const shape = { clipPath: "polygon(14% 0, 86% 0, 100% 50%, 86% 100%, 14% 100%, 0 50%)" };
+  return (
+    <span className={cx("relative inline-grid place-items-center bg-white/[0.12] p-px", className)} style={shape}>
+      <span className="grid h-full w-full place-items-center px-6 bg-[linear-gradient(160deg,rgb(30_44_72),rgb(16_25_42))]" style={shape}>
+        {children}
+      </span>
+    </span>
+  );
+}
+
+/** Live countdown to kickoff as DD : HH : MM : SS. */
+export function Countdown({ to, className }: { to: string; className?: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const ms = new Date(to).getTime() - now;
+  if (ms <= 0) return <span className={cx("text-sm font-semibold text-warn", className)}>Kicked off</span>;
+  const parts = [Math.floor(ms / 86_400_000), Math.floor(ms / 3_600_000) % 24, Math.floor(ms / 60_000) % 60, Math.floor(ms / 1000) % 60];
+  return (
+    <span className={cx("inline-flex items-start gap-1.5 num", className)} aria-label="Time to kickoff">
+      {parts.map((v, i) => (
+        <span key={i} className="contents">
+          {i > 0 && <span className="text-ink-4 font-bold">:</span>}
+          <span className="flex flex-col items-center">
+            <span className="text-base sm:text-lg font-bold leading-none">{String(v).padStart(2, "0")}</span>
+            <span className="mt-1 text-[10px] font-medium text-ink-4">{["Days", "Hours", "Mins", "Sec"][i]}</span>
+          </span>
+        </span>
       ))}
     </span>
   );
@@ -307,13 +342,13 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
 }) {
   if (variant === "tabs") {
     return (
-      <div role="tablist" aria-label={label} className={cx("flex gap-5 sm:gap-6 border-b border-line scroll-x", className)}>
+      <div role="tablist" aria-label={label}
+           className={cx("flex w-full sm:w-auto sm:inline-flex max-w-full gap-1 rounded-full border border-white/[0.07] bg-bg/50 p-1.5 scroll-x", className)}>
         {options.map((o) => (
           <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                  className={cx("relative h-12 shrink-0 text-sm font-semibold whitespace-nowrap transition-colors",
-                                value === o.value ? "text-ink" : "text-ink-3 hover:text-ink")}>
+                  className={cx("h-10 flex-1 sm:flex-none shrink-0 rounded-full px-5 text-sm font-semibold whitespace-nowrap transition-all",
+                                value === o.value ? "bg-gradient-to-b from-brand-2 to-brand text-white glow-blue" : "text-ink-3 hover:text-ink")}>
             {o.label}
-            {value === o.value && <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-brand to-brand-2" />}
           </button>
         ))}
       </div>
@@ -331,11 +366,11 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
     );
   }
   return (
-    <div role="tablist" aria-label={label} className={cx("inline-flex max-w-full rounded-xl border border-line bg-surface p-1 gap-1 scroll-x", className)}>
+    <div role="tablist" aria-label={label} className={cx("inline-flex max-w-full rounded-full border border-white/[0.07] bg-bg/50 p-1 gap-1 scroll-x", className)}>
       {options.map((o) => (
         <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                className={cx("h-8 shrink-0 rounded-lg px-3.5 text-[13px] font-semibold transition-colors whitespace-nowrap",
-                              value === o.value ? "bg-subtle text-ink shadow-card ring-1 ring-inset ring-line-strong" : "text-ink-3 hover:text-ink")}>
+                className={cx("h-8 shrink-0 rounded-full px-4 text-[13px] font-semibold transition-all whitespace-nowrap",
+                              value === o.value ? "bg-gradient-to-b from-brand-2 to-brand text-white glow-blue" : "text-ink-3 hover:text-ink")}>
           {o.label}
         </button>
       ))}
@@ -468,12 +503,12 @@ export function Disclosure({ title, children, defaultOpen = false }: { title: Re
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="min-w-0">
-      <button className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left text-sm font-semibold hover:bg-subtle/40 transition-colors"
+      <button className="w-full flex items-center justify-between gap-3 px-4 sm:px-6 py-4 text-left text-sm font-semibold hover:bg-white/[0.02] transition-colors"
               aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="min-w-0">{title}</span>
         <Icon name="chevronDown" size={16} className={cx("text-ink-4 shrink-0 transition-transform", open && "rotate-180")} />
       </button>
-      {open && <div className="px-4 sm:px-5 pb-5 animate-fade-in">{children}</div>}
+      {open && <div className="px-4 sm:px-6 pb-5 animate-fade-in">{children}</div>}
     </div>
   );
 }

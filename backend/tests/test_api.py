@@ -152,6 +152,16 @@ def test_rate_limit(db, monkeypatch):
     assert codes[:3] == [200, 200, 200] and codes[-1] == 429
 
 
+def test_standings_table_with_form_and_movement(client):
+    rows = client.get("/api/v1/competitions/ENG-1/standings").json()["rows"]
+    assert rows and [r["position"] for r in rows] == list(range(1, len(rows) + 1))
+    assert [r["points"] for r in rows] == sorted((r["points"] for r in rows), reverse=True)
+    assert all(r["played"] == r["won"] + r["drawn"] + r["lost"] and set(r["form"]) <= set("WDL") and len(r["form"]) <= 5
+               for r in rows)
+    assert rows[0]["team"]["name"] and isinstance(rows[0]["movement"], int)
+    assert client.get("/api/v1/competitions/XXX-9/standings").status_code == 404
+
+
 def test_top_picks_one_per_match_ranked(client):
     r = client.get("/api/v1/predictions/top", params={"days": 14})
     assert r.status_code == 200, r.text

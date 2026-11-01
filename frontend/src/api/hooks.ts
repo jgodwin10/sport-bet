@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import { Competition, Fixture, pageOf, SelectionRow, TopPickRecord, TopPicks } from "./types";
+import { Competition, Fixture, pageOf, SelectionRow, Standings, TopPickRecord, TopPicks } from "./types";
 import type { AiAnalysis, AiAnalysisState, Analysis, Page } from "./types";
 import { z } from "zod";
 
@@ -48,13 +48,13 @@ export const usePredictions = (f: PredictionFilters) =>
   });
 
 // "today" | "tomorrow" (the viewer's local calendar day) or a number of days ahead
-export const useTopPicks = (span: string) =>
+export const useTopPicks = (span: string, limit = 10) =>
   useQuery({
-    queryKey: ["top-picks", span],
+    queryKey: ["top-picks", span, limit],
     queryFn: () => api<TopPicks>("/predictions/top", {
       query: span === "today" || span === "tomorrow"
-        ? { day: span, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }
-        : { days: Number(span) },
+        ? { day: span, tz: Intl.DateTimeFormat().resolvedOptions().timeZone, limit }
+        : { days: Number(span), limit },
       schema: TopPicks,
     }),
     ...LIVE,
@@ -72,6 +72,14 @@ export const useCompetitions = () =>
     queryKey: ["competitions"],
     queryFn: () => api("/competitions", { schema: z.array(Competition) }),
     staleTime: 600_000,
+  });
+
+export const useStandings = (code: string | null) =>
+  useQuery({
+    queryKey: ["standings", code],
+    queryFn: () => api(`/competitions/${code}/standings`, { schema: Standings }),
+    enabled: !!code,
+    staleTime: 300_000,
   });
 
 export const useHealth = () =>

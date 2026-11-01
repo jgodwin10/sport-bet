@@ -38,6 +38,13 @@ export type PredictionBrief = z.infer<typeof PredictionBrief>;
 export const TeamRef = z.object({ id: z.number(), name: z.string(), logo_url: z.string().nullable().optional() });
 export type TeamRef = z.infer<typeof TeamRef>;
 
+export const StandingRow = z.object({
+  position: z.number(), movement: z.number(), team: TeamRef, played: z.number(), won: z.number(), drawn: z.number(),
+  lost: z.number(), gf: z.number(), ga: z.number(), gd: z.number(), points: z.number(), form: z.string(),
+});
+export type StandingRow = z.infer<typeof StandingRow>;
+export const Standings = z.object({ competition: z.string(), rows: z.array(StandingRow) });
+
 export const Fixture = z.object({
   id: z.number(),
   competition: Competition,

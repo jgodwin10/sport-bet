@@ -3,13 +3,14 @@ import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { api } from "../api/client";
-import { useCompetitions, useTeamStats } from "../api/hooks";
+import { useTeamStats } from "../api/hooks";
 import { Icon } from "../components/icons";
 import {
   Card, chart, ChartTooltip, Empty, ErrorState, FormPills, Legend, Loading, PageHeader, Pill, ResultLine, SearchInput, StatTile,
   TeamLogo,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, num } from "../lib/format";
+import { useLeague } from "../lib/league";
 
 type TeamItem = { id: number; name: string; logo_url: string | null };
 
@@ -21,34 +22,26 @@ export default function Teams() {
 }
 
 function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
-  const comps = useCompetitions();
-  const [league, setLeague] = useState("ENG-1");
+  const { league } = useLeague();
   const [search, setSearch] = useState("");
   const teams = useQuery({
     queryKey: ["teams", league, search],
-    queryFn: () => api<TeamItem[]>("/teams", { query: { competition: search ? undefined : league, search: search || undefined, limit: 60 } }),
+    queryFn: () => api<TeamItem[]>("/teams", { query: { competition: search || league === "all" ? undefined : league, search: search || undefined, limit: 120 } }),
   });
   return (
     <>
       <PageHeader title="Teams" description="Form, ratings and results for every club we track." />
-      <div className="mb-6 flex gap-2">
-        <SearchInput value={search} onChange={setSearch} placeholder="Search all teams" className="flex-1" />
-        {!search && (
-          <select className="input w-auto max-w-[45%] sm:max-w-[240px]" aria-label="League" value={league} onChange={(e) => setLeague(e.target.value)}>
-            {(comps.data ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
-          </select>
-        )}
-      </div>
+      <SearchInput value={search} onChange={setSearch} placeholder="Search all teams" className="mb-6 sm:max-w-sm" />
       {teams.isLoading ? <Card><Loading rows={4} /></Card> : teams.isError ? <ErrorState error={teams.error} onRetry={teams.refetch} /> : !teams.data?.length ? (
         <Card><Empty title="No teams found" icon="shield">Try a different search or league.</Empty></Card>
       ) : (
-        <ul className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+        <ul className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-3">
           {teams.data.map((t) => (
             <li key={t.id} className="min-w-0">
               <button onClick={() => onSelect(t.id)}
-                      className="w-full h-full flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition-colors hover:bg-surface hover:shadow-sm">
-                <TeamLogo name={t.name} src={t.logo_url} size={44} />
-                <span className="w-full text-[13px] font-medium leading-tight line-clamp-2 break-words">{t.name}</span>
+                      className="tile card-link w-full h-full flex flex-col items-center gap-3 px-3 py-5 text-center">
+                <TeamLogo name={t.name} src={t.logo_url} size={52} />
+                <span className="w-full text-[13px] font-semibold leading-tight line-clamp-2 break-words">{t.name}</span>
               </button>
             </li>
           ))}

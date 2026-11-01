@@ -7,6 +7,7 @@ import { Icon } from "../components/icons";
 import { Card, cx, Empty, ErrorState, InfoTip, Loading, PageHeader, Pill, Segmented, StatTile } from "../components/ui";
 import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { friendlyReason, selectionLabel } from "../lib/language";
+import { inLeague, useLeague } from "../lib/league";
 
 const WINDOWS = [
   { value: "today", label: "Today" },
@@ -40,8 +41,9 @@ export default function TopPicks() {
 
 function Upcoming() {
   const [span, setSpan] = useState("today");
-  const q = useTopPicks(span);
-  const items = q.data?.items ?? [];
+  const { league } = useLeague();
+  const q = useTopPicks(span, 25);
+  const items = inLeague(q.data?.items ?? [], league);
   const recommended = items.filter((t) => t.tier === "recommended").length;
 
   return (
@@ -65,7 +67,7 @@ function Upcoming() {
                   : "None of these pass every safety check yet, so treat them as a watchlist."}
               </p>
             )}
-            <ol className="grid gap-3 lg:grid-cols-2">
+            <ol className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {items.map((t) => (
                 <li key={t.selection_id} className="min-w-0">
                   <BetCard r={t} rank={t.rank} highlight={t.tier === "recommended"}

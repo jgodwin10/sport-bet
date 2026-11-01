@@ -8,7 +8,7 @@ import { Icon } from "../components/icons";
 import Lineups from "../components/Lineups";
 import {
   Card, chart, ChartTooltip, cx, Disclosure, Empty, ErrorState, Figures, FormPills, Freshness, InfoTip,
-  KeyValue, Legend, Loading, OutcomeBar, Pill, ReliabilityBadge, ResultLine, SectionTitle, Segmented, TeamLogo,
+  Countdown, Hex, KeyValue, Legend, Loading, OutcomeBar, Pill, ReliabilityBadge, ResultLine, SectionTitle, Segmented, TeamLogo,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, fmtTime, num, odds, pct, signedPct } from "../lib/format";
 import { aiProviderName, bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plainFacts, selectionLabel, verdict } from "../lib/language";
@@ -38,7 +38,7 @@ export default function MatchAnalysis() {
         <Icon name="chevronLeft" size={15} />Matches
       </Link>
       <Hero a={a} />
-      <div className="sticky top-[calc(3.5rem+env(safe-area-inset-top,0px))] z-20 -mx-4 sm:-mx-6 mt-6 mb-6 px-4 sm:px-6 bg-bg/90 backdrop-blur-md">
+      <div className="mt-5 mb-5">
         <Segmented variant="tabs" label="Match sections" value={tab} options={[...TABS]}
                    onChange={(v) => setParams(v === "overview" ? {} : { tab: v }, { replace: true })} />
       </div>
@@ -68,60 +68,59 @@ function Hero({ a }: { a: Analysis }) {
   const me = useMe(!!getToken());
   const action = useAdminAction();
   const r = p?.markets["1x2"];
-  const lead = r ? (["home", "draw", "away"] as const).reduce((x, y) => (r[y] > r[x] ? y : x)) : null;
   const conf = p ? CONFIDENCE[p.reliability.label] : null;
+  const live = f.status === "scheduled" && new Date(f.kickoff_utc).getTime() <= Date.now();
+  const v = p ? verdict(p.classification) : null;
   return (
-    <section className="card relative overflow-hidden px-4 pt-5 pb-5 sm:px-8 sm:pt-7 text-center">
+    <section className="card relative overflow-hidden">
       <div aria-hidden className="pointer-events-none absolute inset-0"
-           style={{ background: "radial-gradient(420px 220px at 0% 0%, rgb(var(--home) / 0.14), transparent 70%), radial-gradient(420px 220px at 100% 0%, rgb(var(--away) / 0.12), transparent 70%)" }} />
+           style={{ background: "radial-gradient(520px 300px at 15% 50%, rgb(var(--home) / 0.16), transparent 70%), radial-gradient(520px 300px at 85% 50%, rgb(var(--away) / 0.10), transparent 70%)" }} />
       <div className="relative">
-      <div className="inline-flex items-center gap-2 rounded-full border border-line bg-bg/50 px-3 py-1 text-xs font-semibold text-ink-3">
-        <span className="text-ink-2">{f.competition.name}</span><span className="text-ink-4">·</span>{fmtDateTime(f.kickoff_utc)}
-      </div>
-
-      <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-8">
-        {[f.home_team, null, f.away_team].map((t) => t ? (
-          <div key={t.id} className="flex flex-col items-center min-w-0">
-            <span className="grid place-items-center rounded-full bg-bg/50 p-2 ring-1 ring-line">
-              <TeamLogo name={t.name} src={t.logo_url} size={52} className="sm:!w-[68px] sm:!h-[68px]" />
-            </span>
-            <h1 className="mt-3 text-[15px] sm:text-xl font-extrabold leading-snug">{t.name}</h1>
-          </div>
-        ) : (
-          <div key="mid" className="pt-3 sm:pt-5">
-            {f.score ? (
-              <div className="text-3xl sm:text-5xl font-extrabold num">{f.score.home}<span className="text-ink-4 mx-1.5">–</span>{f.score.away}</div>
-            ) : (
-              <div className="leading-tight">
-                <div className="text-2xl sm:text-4xl font-extrabold num">{fmtTime(f.kickoff_utc).split(" ")[0]}</div>
-                <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-4">{fmtTime(f.kickoff_utc).split(" ")[1] ?? "Kickoff"}</div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {p && r && lead && (
-        <div className="mx-auto mt-6 max-w-md">
-          <p className="text-sm text-ink-3">
-            Most likely <span className="font-bold text-ink">{outcomeLabel(lead, f.home_team.name, f.away_team.name)}</span>{" "}
-            <span className="ml-1 rounded-lg bg-brand/15 px-2 py-0.5 num font-extrabold text-brand">{pct(r[lead], 0)}</span>
-          </p>
-          <div className="mt-3 text-left"><OutcomeBar size="lg" p={r} labels={["Home", "Draw", "Away"]} /></div>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 pt-5">
+          <span className={cx("rounded-full px-3 py-1 text-xs font-bold",
+                              live ? "bg-neg text-white" : p?.classification === "consider" ? "bg-pos/15 text-pos ring-1 ring-inset ring-pos/30"
+                                : p?.classification === "high_uncertainty" ? "bg-warn/15 text-warn ring-1 ring-inset ring-warn/30" : "bg-brand/20 text-brand-2 ring-1 ring-inset ring-brand/30")}
+                title={v?.explain}>
+            {live ? "Live" : v?.label ?? "Upcoming"}
+          </span>
+          {me.data?.role === "admin" && (
+            <button className="btn btn-sm" disabled={action.isPending} onClick={() => action.mutate({ path: `/admin/refresh-fixture/${f.id}` })}>
+              <Icon name="refresh" size={13} />{action.isPending ? "Queuing…" : action.isSuccess ? "Queued" : "Refresh"}
+            </button>
+          )}
         </div>
-      )}
 
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-ink-3">
-        {p && <span className={cx("font-medium", p.classification === "consider" ? "text-pos" : p.classification === "high_uncertainty" ? "text-warn" : "text-ink-2")}>{verdict(p.classification).label}</span>}
-        {p && conf && <span title={GLOSSARY.confidence}>Confidence {conf.label.toLowerCase()}</span>}
-        <span>{p?.lineup_status === "confirmed" ? "Lineups confirmed" : "Lineups not out"}</span>
-        <Freshness hours={a.odds.age_hours} />
-        {me.data?.role === "admin" && (
-          <button className="btn btn-sm" disabled={action.isPending} onClick={() => action.mutate({ path: `/admin/refresh-fixture/${f.id}` })}>
-            <Icon name="refresh" size={13} />{action.isPending ? "Queuing…" : action.isSuccess ? "Queued" : "Refresh"}
-          </button>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 sm:gap-6 px-3 sm:px-8 pt-5">
+          {[f.home_team, null, f.away_team].map((t, i) => t ? (
+            <Link key={t.id} to={`/teams?team=${t.id}`} className="flex flex-col items-center min-w-0 text-center">
+              <TeamLogo name={t.name} src={t.logo_url} size={64} className="sm:!w-[104px] sm:!h-[104px]" />
+              <h1 className="mt-3 text-base sm:text-[26px] font-extrabold leading-tight">{t.name}</h1>
+              <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">{i === 0 ? "Home" : "Away"}</span>
+            </Link>
+          ) : (
+            <div key="mid" className="flex flex-col items-center gap-2 sm:gap-3 text-center">
+              <div className="text-[13px] sm:text-lg font-bold leading-tight">{f.competition.name}</div>
+              <div className="text-[11px] sm:text-xs text-ink-3">{fmtDateTime(f.kickoff_utc)}</div>
+              {!f.score && <Countdown to={f.kickoff_utc} className="hidden sm:inline-flex" />}
+              <Hex className="h-12 sm:h-14">
+                <span className="text-xl sm:text-[26px] font-extrabold num">
+                  {f.score ? `${f.score.home} - ${f.score.away}` : fmtTime(f.kickoff_utc).split(" ")[0]}
+                </span>
+              </Hex>
+            </div>
+          ))}
+        </div>
+        {!f.score && <div className="flex justify-center sm:hidden"><Countdown to={f.kickoff_utc} className="mt-4" /></div>}
+
+        {p && r && (
+          <div className="mx-auto max-w-xl px-4 sm:px-8 pt-6"><OutcomeBar size="lg" p={r} labels={["Home", "Draw", "Away"]} /></div>
         )}
-      </div>
+
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2 border-t border-white/[0.06] px-4 py-3.5 text-xs text-ink-3">
+          {p && conf && <span className="rounded-full bg-bg/50 px-3 py-1 ring-1 ring-inset ring-white/[0.07]" title={GLOSSARY.confidence}>Confidence <b className="text-ink-2">{conf.label}</b></span>}
+          <span className="rounded-full bg-bg/50 px-3 py-1 ring-1 ring-inset ring-white/[0.07]">{p?.lineup_status === "confirmed" ? "Lineups confirmed" : "Lineups not out"}</span>
+          <span className="rounded-full bg-bg/50 px-3 py-1 ring-1 ring-inset ring-white/[0.07]"><Freshness hours={a.odds.age_hours} /></span>
+        </div>
       </div>
     </section>
   );

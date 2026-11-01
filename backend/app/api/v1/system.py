@@ -13,8 +13,10 @@ from app.core.config import get_settings
 from app.core.security import create_token, require_admin, require_user, verify_password
 from app.db.models import (
     AuditLog, Backtest, Competition, DataConflict, Fixture, IngestionJob, MatchResult, ModelVersion, Selection,
-    StakeEntry, User,
+    StakeEntry, Team, User,
 )
+from app.api.v1.serializers import team_ref
+from app.services.analytics import standings
 from app.db.session import get_db
 from app.ingestion.competitions import COMPETITIONS
 from app.providers.ai import get_ai
@@ -74,6 +76,36 @@ def providers() -> list[dict]:
 @router.get("/competitions", response_model=list[CompetitionOut], tags=["system"])
 def competitions(db: Session = Depends(get_db)) -> list[Competition]:
     return list(db.scalars(select(Competition).order_by(Competition.country, Competition.tier)))
+
+
+@router.get("/competitions/{code}/standings", tags=["system"])
+def competition_standings(code: str, db: Session = Depends(get_db)) -> dict:
+    """League table of the current season (the one with the latest played match), each team's last five
+    results (newest first) and its move in position over the past week (positive = up)."""
+    comp = db.scalar(select(Competition).where(Competition.code == code))
+    if comp is None:
+        raise HTTPException(404, "competition not found")
+    now = datetime.now(timezone.utc)
+    season_id = db.scalar(select(Fixture.season_id).join(MatchResult, MatchResult.fixture_id == Fixture.id)
+                          .where(Fixture.competition_id == comp.id, Fixture.kickoff_utc <= now)
+                          .order_by(Fixture.kickoff_utc.desc()).limit(1))
+    if season_id is None:
+        return {"competition": code, "rows": []}
+    table = standings(db, season_id, now)
+    before = {r["team_id"]: r["position"] for r in standings(db, season_id, now - timedelta(days=7))}
+    form: dict[int, str] = {}
+    for fx, r in db.execute(select(Fixture, MatchResult).join(MatchResult, MatchResult.fixture_id == Fixture.id)
+                            .where(Fixture.season_id == season_id, Fixture.stage == "league", Fixture.kickoff_utc < now)
+                            .order_by(Fixture.kickoff_utc.desc())):
+        for tid, gf, ga in ((fx.home_team_id, r.home_goals, r.away_goals), (fx.away_team_id, r.away_goals, r.home_goals)):
+            if len(form.get(tid, "")) < 5:
+                form[tid] = form.get(tid, "") + ("W" if gf > ga else "D" if gf == ga else "L")
+    teams = {t.id: t for t in db.scalars(select(Team).where(Team.id.in_([r["team_id"] for r in table])))}
+    return {"competition": code, "rows": [
+        {**{k: v for k, v in r.items() if k not in ("team_id", "team")}, "team": team_ref(teams[r["team_id"]]),
+         "form": form.get(r["team_id"], ""),
+         "movement": before[r["team_id"]] - r["position"] if r["team_id"] in before else 0}
+        for r in table]}
 
 
 @router.get("/data-quality", tags=["system"])
