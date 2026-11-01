@@ -20,13 +20,18 @@ const fixture: Fixture = {
 };
 
 describe("MatchRow", () => {
-  it("links to the match and shows probabilities, assessment and stale-data warning", () => {
+  it("links to the match and shows teams and probabilities, without a value marker by default", () => {
     render(<MemoryRouter><MatchRow f={fixture} /></MemoryRouter>);
     expect(screen.getByRole("link")).toHaveAttribute("href", "/match/7");
     expect(screen.getByText("Alpha Town")).toBeInTheDocument();
-    expect(screen.getAllByText("Too uncertain").length).toBeGreaterThan(0); // phone header + desktop row
     expect(screen.getByRole("img")).toHaveAttribute("aria-label", "1 50%, X 30%, 2 20%");
-    expect(screen.getByText(/40 h ago/)).toBeInTheDocument();
+    expect(screen.queryByText("Value bet")).toBeNull();
+  });
+
+  it("marks matches with a value bet", () => {
+    const value = { ...fixture, latest_prediction: { ...fixture.latest_prediction!, classification: "consider" } };
+    render(<MemoryRouter><MatchRow f={value} /></MemoryRouter>);
+    expect(screen.getByText("Value bet")).toBeInTheDocument();
   });
 });
 

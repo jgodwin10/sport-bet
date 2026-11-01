@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getToken } from "../api/client";
 import { useAdminAction, useDataQuality, useMe, useSettings } from "../api/hooks";
 import { providerName } from "../lib/language";
-import { Icon, type IconName } from "../components/icons";
+import { Icon } from "../components/icons";
 import { Card, cx, ErrorState, Field, Loading, PageHeader, Pill } from "../components/ui";
 import { fmtDateTime, getTimezone, setTimezone } from "../lib/format";
 
@@ -27,13 +27,9 @@ const RULE_FIELDS: { key: string; label: string; hint: string; step: string; uni
 const MARKETS: [string, string][] = [["1x2", "Match result"], ["totals_1.5", "Over/under 1.5"], ["totals_2.5", "Over/under 2.5"],
   ["totals_3.5", "Over/under 3.5"], ["asian_handicap", "Asian handicap"]];
 
-function Section({ icon, title, description, children }: { icon: IconName; title: string; description: string; children: ReactNode }) {
+function Section({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
-    <Card>
-      <div className="flex items-start gap-3.5 mb-5">
-        <span className="grid place-items-center h-10 w-10 rounded-xl bg-night-3 border border-line text-brand shrink-0"><Icon name={icon} size={18} /></span>
-        <div><h2 className="h-section">{title}</h2><p className="mt-0.5 text-[13.5px] text-ink-3 leading-relaxed">{description}</p></div>
-      </div>
+    <Card title={title} subtitle={description}>
       {children}
     </Card>
   );
@@ -42,10 +38,10 @@ function Section({ icon, title, description, children }: { icon: IconName; title
 function Toggle({ checked, onChange, disabled, label, hint }: { checked: boolean; onChange: (v: boolean) => void; disabled?: boolean; label: string; hint?: string }) {
   return (
     <div className={cx("flex items-start justify-between gap-4 py-3", disabled && "opacity-60")}>
-      <span><span className="block text-[14px] font-semibold">{label}</span>{hint && <span className="block text-xs text-ink-3 mt-0.5">{hint}</span>}</span>
+      <span className="min-w-0"><span className="block text-sm font-medium">{label}</span>{hint && <span className="block text-xs text-ink-3 mt-0.5">{hint}</span>}</span>
       <button type="button" role="switch" aria-checked={checked} aria-label={label} disabled={disabled} onClick={() => onChange(!checked)}
-              className={cx("relative h-7 w-12 shrink-0 rounded-full transition-colors", checked ? "bg-brand" : "bg-white/15")}>
-        <span className={cx("absolute left-0 top-0.5 h-6 w-6 rounded-full shadow transition-transform", checked ? "translate-x-[22px] bg-brand-ink" : "translate-x-0.5 bg-white")} />
+              className={cx("relative h-6 w-10 shrink-0 rounded-full transition-colors", checked ? "bg-ink" : "bg-line-strong")}>
+        <span className={cx("absolute left-0 top-0.5 h-5 w-5 rounded-full bg-bg shadow-sm transition-transform", checked ? "translate-x-[18px]" : "translate-x-0.5")} />
       </button>
     </div>
   );
@@ -53,7 +49,7 @@ function Toggle({ checked, onChange, disabled, label, hint }: { checked: boolean
 
 function ChipToggle({ on, disabled, onClick, children }: { on: boolean; disabled: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <button disabled={disabled} aria-pressed={on} onClick={onClick} className="chip-btn disabled:opacity-60">
+    <button disabled={disabled} aria-pressed={on} onClick={onClick} className="chip border border-line disabled:opacity-60">
       {on && <Icon name="check" size={13} />}{children}
     </button>
   );
@@ -88,22 +84,20 @@ export default function Settings() {
 
   return (
     <>
-      <PageHeader title="Settings" description="Control when a bet counts as a recommendation. API keys stay on the server and are never shown here." />
+      <PageHeader title="Settings" description="When a bet counts as a recommendation. API keys stay on the server and never appear here." />
       {!isAdmin && (
-        <div className="glass mb-5 flex gap-3 rounded-xl p-4 text-[14px] text-ink-2">
-          <Icon name="info" size={18} className="text-ink-3 mt-0.5 shrink-0" />You're viewing settings read-only. Sign in as an administrator to change them.
-        </div>
+        <p className="mb-6 text-sm text-ink-3">Read-only. Sign in as an administrator to change these.</p>
       )}
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 items-start">
-        <Section icon="target" title="When to recommend a bet" description="Every rule must pass. Stricter rules mean fewer, safer picks.">
+      <div className="grid gap-6 lg:grid-cols-2 items-start">
+        <Section title="When to recommend a bet" description="Every rule must pass. Stricter rules mean fewer, safer picks.">
           <div className="grid gap-4 sm:grid-cols-2">
             {RULE_FIELDS.map((f) => (
               <Field key={f.key} label={f.label} hint={f.hint}>
                 <div className="relative">
-                  <input className="input pr-24" type="number" inputMode="decimal" step={f.step} disabled={!isAdmin} value={rules[f.key]}
+                  <input className="input pr-20" type="number" inputMode="decimal" step={f.step} disabled={!isAdmin} value={rules[f.key]}
                          onChange={(e) => setRules({ ...rules, [f.key]: Number(e.target.value) })} />
-                  <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-2xs text-ink-4">{f.unit}</span>
+                  <span className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-ink-4">{f.unit}</span>
                 </div>
               </Field>
             ))}
@@ -114,21 +108,21 @@ export default function Settings() {
           </div>
         </Section>
 
-        <div className="space-y-6">
-          <Section icon="sliders" title="Markets & leagues" description="Which bets can be recommended, and your favourite leagues.">
-            <div className="field-label mb-2">Markets</div>
-            <div className="flex flex-wrap gap-2">
+        <div className="space-y-6 min-w-0">
+          <Section title="Markets & leagues" description="Which bets can be recommended, and your favourite leagues.">
+            <div className="label mb-2">Markets</div>
+            <div className="flex flex-wrap gap-1.5">
               {MARKETS.map(([k, label]) => <ChipToggle key={k} on={options.enabled_markets.includes(k)} disabled={!isAdmin} onClick={() => toggleIn("enabled_markets", k)}>{label}</ChipToggle>)}
             </div>
-            <div className="field-label mt-5 mb-2">Favourite leagues</div>
-            <div className="flex flex-wrap gap-2">
+            <div className="label mt-5 mb-2">Favourite leagues</div>
+            <div className="flex flex-wrap gap-1.5">
               {server.available_competitions.filter((c: any) => server.tracked_competitions.includes(c.code)).map((c: any) => (
                 <ChipToggle key={c.code} on={options.preferred_competitions.includes(c.code)} disabled={!isAdmin} onClick={() => toggleIn("preferred_competitions", c.code)}>{c.name}</ChipToggle>
               ))}
             </div>
           </Section>
 
-          <Section icon="shield" title="Play it safe" description="Notifications are off unless you switch them on. Limits never rise automatically.">
+          <Section title="Play it safe" description="Notifications are off unless you switch them on. Limits never rise automatically.">
             <div className="divide-soft">
               <Toggle label="Betting notifications" hint="Alerts when a value pick appears" checked={options.notifications_enabled} disabled={!isAdmin}
                       onChange={(v) => setOptions({ ...options, notifications_enabled: v })} />
@@ -141,7 +135,7 @@ export default function Settings() {
             </div>
           </Section>
 
-          <Section icon="clock" title="Display" description="Saved in this browser. Times are stored in UTC.">
+          <Section title="Display" description="Saved in this browser. Times are stored in UTC.">
             <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
               <Field label="Timezone" className="flex-1"><input className="input" value={tz} onChange={(e) => { setTz(e.target.value); setTzSaved(false); }} placeholder="e.g. Europe/London" /></Field>
               <button className="btn" onClick={() => {
@@ -152,24 +146,24 @@ export default function Settings() {
           </Section>
         </div>
 
-        <Section icon="database" title="Data sources" description={`Fixtures refresh every ${server.update_intervals_minutes.fixtures} min, odds every ${server.update_intervals_minutes.odds} min, lineups every ${server.update_intervals_minutes.lineups} min.`}>
-          <ul className="space-y-2.5">
+        <Section title="Data sources" description={`Fixtures refresh every ${server.update_intervals_minutes.fixtures} min, odds every ${server.update_intervals_minutes.odds} min, lineups every ${server.update_intervals_minutes.lineups} min.`}>
+          <ul className="divide-soft -my-3">
             {server.providers.map((p: any) => (
-              <li key={p.name} className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
+              <li key={p.name} className="flex items-center justify-between gap-3 py-3">
                 <span className="flex items-center gap-3 min-w-0">
-                  <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", p.configured ? "bg-pos" : "bg-white/20")} />
-                  <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">{providerName(p.name)}</span>
-                    <span className="block text-2xs text-ink-4 truncate">{Object.keys(p.capabilities).filter((k) => !["competitions", "requires_key", "rate_limit", "note", "cost"].includes(k) && p.capabilities[k]).join(" · ").replace(/_/g, " ")}</span></span>
+                  <span className={cx("h-2 w-2 rounded-full shrink-0", p.configured ? "bg-pos" : "bg-line-strong")} />
+                  <span className="min-w-0"><span className="block text-sm font-medium truncate">{providerName(p.name)}</span>
+                    <span className="block text-xs text-ink-4 truncate">{Object.keys(p.capabilities).filter((k) => !["competitions", "requires_key", "rate_limit", "note", "cost"].includes(k) && p.capabilities[k]).join(" · ").replace(/_/g, " ")}</span></span>
                 </span>
                 <Pill tone={p.configured ? "pos" : "neutral"}>{p.configured ? "Active" : "Needs key"}</Pill>
               </li>
             ))}
             {server.ai && (
-              <li className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
+              <li className="flex items-center justify-between gap-3 py-3">
                 <span className="flex items-center gap-3 min-w-0">
-                  <span className={cx("h-2.5 w-2.5 rounded-full shrink-0", server.ai.configured ? "bg-pos" : "bg-white/20")} />
-                  <span className="min-w-0"><span className="block text-[14px] font-semibold truncate">AI analysis</span>
-                    <span className="block text-2xs text-ink-4 truncate">
+                  <span className={cx("h-2 w-2 rounded-full shrink-0", server.ai.configured ? "bg-pos" : "bg-line-strong")} />
+                  <span className="min-w-0"><span className="block text-sm font-medium truncate">AI analysis</span>
+                    <span className="block text-xs text-ink-4 truncate">
                       {server.ai.configured
                         ? `${server.ai.keys.filter((k: any) => k.available).length} of ${server.ai.keys.length} keys ready · ${server.ai.models[0]}`
                         : "match write-ups · team news via web search"}
@@ -181,7 +175,7 @@ export default function Settings() {
           </ul>
           {isAdmin && (
             <div className="mt-5">
-              <div className="field-label mb-2">Run now</div>
+              <div className="label mb-2">Run now</div>
               <div className="flex flex-wrap gap-2">
                 {[["upcoming", "Fetch fixtures"], ["odds", "Refresh odds"], ["predict", "Update predictions"], ["settle", "Settle results"], ["logos", "Refresh crests"], ["ai_analysis", "AI analysis"], ["history", "Reload history"]].map(([k, label]) => (
                   <button key={k} className="btn btn-sm" onClick={() => action.mutate({ path: "/admin/ingest", body: { kind: k } })}><Icon name="refresh" size={13} />{label}</button>
@@ -191,28 +185,28 @@ export default function Settings() {
           )}
         </Section>
 
-        <Section icon="alert" title="Data health" description="Problems the system found and how it handled them.">
+        <Section title="Data health" description="Problems the system found and how it handled them.">
           {dq.isLoading ? <Loading rows={2} /> : dq.isError ? <ErrorState error={dq.error} /> : (
             <div className="space-y-3">
               {[
                 ["Unresolved data conflicts", dq.data!.unresolved_conflicts.length, "Sources that disagree about a team, kickoff or score"],
                 ["Finished matches without a result", dq.data!.fixtures_missing_results.length, "Results arrive with the next data refresh"],
               ].map(([label, n, hint]) => (
-                <div key={String(label)} className="flex items-center justify-between gap-3 glass-inset px-4 py-3">
-                  <span><span className="block text-[14px] font-semibold">{label}</span><span className="block text-xs text-ink-3">{hint}</span></span>
+                <div key={String(label)} className="flex items-center justify-between gap-3 py-1">
+                  <span className="min-w-0"><span className="block text-sm font-medium">{label}</span><span className="block text-xs text-ink-3">{hint}</span></span>
                   <Pill tone={Number(n) ? "warn" : "pos"}>{Number(n) ? n : "All clear"}</Pill>
                 </div>
               ))}
-              {dq.data!.fixtures_missing_results.slice(0, 4).map((f: any) => <p key={f.fixture_id} className="text-xs text-ink-4 pl-1">Match #{f.fixture_id} · kicked off {fmtDateTime(f.kickoff_utc)}</p>)}
+              {dq.data!.fixtures_missing_results.slice(0, 4).map((f: any) => <p key={f.fixture_id} className="text-xs text-ink-4">Match #{f.fixture_id} · kicked off {fmtDateTime(f.kickoff_utc)}</p>)}
             </div>
           )}
         </Section>
       </div>
 
       {isAdmin && (dirty || error || action.isSuccess || action.isError) && (
-        <div className="sticky bottom-24 lg:bottom-6 z-20 mt-6 flex justify-center">
-          <div className="glass-strong flex flex-wrap items-center gap-3 rounded-xl pl-4 pr-2 py-2 max-w-full">
-            <span className={cx("text-[13.5px] font-semibold", error || action.isError ? "text-neg" : action.isSuccess && !dirty ? "text-pos" : "text-ink-2")}>
+        <div className="sticky bottom-20 md:bottom-6 z-20 mt-6 flex justify-center">
+          <div className="flex flex-wrap items-center gap-2 rounded-full border border-line bg-surface shadow-pop pl-4 pr-1.5 py-1.5 max-w-full">
+            <span className={cx("text-[13px] font-medium", error || action.isError ? "text-neg" : action.isSuccess && !dirty ? "text-pos" : "text-ink-2")}>
               {error ?? (action.isError ? (action.error as Error).message : action.isSuccess && !dirty ? "Saved" : "Unsaved changes")}
             </span>
             {dirty && <button className="btn btn-sm" onClick={() => { setRules(s.data!.rules); setOptions(s.data!.options); setError(null); }}>Discard</button>}

@@ -33,22 +33,21 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-[62dvh] grid place-items-center animate-fade-up">
+    <div className="min-h-[60dvh] grid place-items-center">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-7">
-          <span className="inline-grid place-items-center h-14 w-14 rounded-xl bg-brand text-brand-ink mb-4"><Icon name="user" size={24} /></span>
-          <h1 className="h-page">Welcome back</h1>
-          <p className="mt-1.5 text-[14px] text-ink-3">Anyone can browse predictions. Sign in to manage settings and track stakes.</p>
+        <div className="text-center mb-6">
+          <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+          <p className="mt-1.5 text-sm text-ink-3">Anyone can browse predictions. Sign in to manage settings.</p>
         </div>
         <form onSubmit={submit} className="card p-5 sm:p-6 space-y-4" noValidate>
           <Field label="Email"><input className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
           <Field label="Password"><input className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
           {error && (
-            <p role="alert" className="flex gap-2 rounded-xl bg-neg-soft border border-neg/25 px-3 py-2.5 text-[13px] text-ink-2">
-              <Icon name="alert" size={15} className="text-neg shrink-0 mt-0.5" />{error}
+            <p role="alert" className="flex gap-2 text-[13px] text-neg">
+              <Icon name="alert" size={15} className="shrink-0 mt-0.5" />{error}
             </p>
           )}
-          <button className="btn btn-primary w-full h-11" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
+          <button className="btn btn-primary w-full" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         </form>
       </div>
     </div>
