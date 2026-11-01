@@ -171,6 +171,33 @@ def test_top_picks_one_per_match_ranked(client):
     assert client.get("/api/v1/predictions/top", params={"limit": 100}).status_code == 422
 
 
+def test_top_picks_for_today_and_tomorrow_stay_inside_the_local_day(client):
+    week = client.get("/api/v1/predictions/top", params={"days": 14, "limit": 25}).json()["items"]
+    seen = 0
+    for day in ("today", "tomorrow"):
+        r = client.get("/api/v1/predictions/top", params={"day": day, "tz": "America/New_York"})
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["day"] == day
+        start, end = (datetime.fromisoformat(body[k]) for k in ("window_start", "window_end"))
+        assert all(start < datetime.fromisoformat(i["kickoff_utc"]).replace(tzinfo=timezone.utc) < end
+                   for i in body["items"])
+        assert [i["rank"] for i in body["items"]] == list(range(1, len(body["items"]) + 1))
+        seen += len(body["items"])
+    assert seen <= len(week)
+    assert client.get("/api/v1/predictions/top", params={"day": "today", "tz": "Mars/Base"}).status_code == 422
+    assert client.get("/api/v1/predictions/top", params={"day": "yesterday"}).status_code == 422
+
+
+def test_day_window_follows_the_local_calendar_across_dst():
+    from app.api.v1.predictions import day_window
+    now = datetime(2026, 10, 24, 23, 30, tzinfo=timezone.utc)  # already Sunday 25 Oct in Berlin
+    start, end = day_window("today", "Europe/Berlin", now)
+    assert (start, end) == (datetime(2026, 10, 24, 22, tzinfo=timezone.utc), datetime(2026, 10, 25, 23, tzinfo=timezone.utc))
+    assert end - start == timedelta(hours=25)  # clocks go back that night
+    assert day_window("tomorrow", "Europe/Berlin", now)[0] == end
+
+
 def test_top_picks_are_recorded_frozen_at_kickoff_and_settled(client, db):
     now = datetime.now(timezone.utc)
     assert record_top_picks(db, now)["listed"] > 2

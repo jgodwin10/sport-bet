@@ -10,10 +10,15 @@ import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { friendlyReason, GLOSSARY, selectionLabel } from "../lib/language";
 
 const WINDOWS = [
-  { value: "2", label: "Next 48 hours" },
+  { value: "today", label: "Today" },
+  { value: "tomorrow", label: "Tomorrow" },
   { value: "7", label: "Next 7 days" },
-  { value: "14", label: "Next 14 days" },
 ];
+
+const EMPTY: Record<string, string> = {
+  today: "None of today's remaining matches has a price that beats our estimate. Try tomorrow, or check back after the next odds refresh.",
+  tomorrow: "None of tomorrow's matches has a price that beats our estimate yet. Odds for many matches only arrive a day or two before kickoff.",
+};
 
 const TRACKING = "Every match in the Top 10 at kickoff counts, staked 1 unit at the odds shown when it was last listed. Picks that dropped out before kickoff are shown but not counted.";
 
@@ -35,21 +40,21 @@ export default function TopPicks() {
 }
 
 function Upcoming() {
-  const [days, setDays] = useState("7");
-  const q = useTopPicks(Number(days));
+  const [span, setSpan] = useState("today");
+  const q = useTopPicks(span);
   const items = q.data?.items ?? [];
   const recommended = items.filter((t) => t.tier === "recommended").length;
 
   return (
     <>
-      <Segmented variant="chips" label="Window" value={days} onChange={setDays} options={WINDOWS} className="mb-4" />
+      <Segmented variant="chips" label="Window" value={span} onChange={setSpan} options={WINDOWS} className="mb-4" />
 
       {q.isLoading ? <Card><Loading rows={6} /></Card>
         : q.isError ? <ErrorState error={q.error} onRetry={q.refetch} />
         : !items.length ? (
           <Card>
-            <Empty title="No picks in this window" icon="ban">
-              None of the upcoming matches has a price that beats our estimate. Try a longer window, or check back after the next odds refresh.
+            <Empty title={span === "today" ? "No picks left today" : span === "tomorrow" ? "No picks for tomorrow yet" : "No picks in this window"} icon="ban">
+              {EMPTY[span] ?? "None of the upcoming matches has a price that beats our estimate. Try a longer window, or check back after the next odds refresh."}
             </Empty>
           </Card>
         ) : (

@@ -47,10 +47,16 @@ export const usePredictions = (f: PredictionFilters) =>
     ...LIVE,
   });
 
-export const useTopPicks = (days: number) =>
+// "today" | "tomorrow" (the viewer's local calendar day) or a number of days ahead
+export const useTopPicks = (span: string) =>
   useQuery({
-    queryKey: ["top-picks", days],
-    queryFn: () => api<TopPicks>("/predictions/top", { query: { days }, schema: TopPicks }),
+    queryKey: ["top-picks", span],
+    queryFn: () => api<TopPicks>("/predictions/top", {
+      query: span === "today" || span === "tomorrow"
+        ? { day: span, tz: Intl.DateTimeFormat().resolvedOptions().timeZone }
+        : { days: Number(span) },
+      schema: TopPicks,
+    }),
     ...LIVE,
   });
 

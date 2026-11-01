@@ -21,7 +21,7 @@ import numpy as np
 
 from app.engine.dixon_coles import DixonColesModel, MatchObservation, UnknownTeamError
 from app.engine.elo import EloConfig, EloState, OrderedLogit1X2, season_of
-from app.engine.ensemble import FeatureModel, LinearPool, disagreement
+from app.engine.ensemble import LOG_POOL_MARKER, FeatureModel, LinearPool, LogPool, disagreement
 from app.engine.features import MODEL_FEATURES, FeatureBuilder, MatchRecord, model_vector
 from app.engine.odds import remove_margin_shin
 from app.engine.scoreline import ScoreMatrix
@@ -197,7 +197,18 @@ def market_binary(over: float | None, under: float | None) -> float | None:
 
 
 def combine_1x2(probs: dict[str, np.ndarray], weights: dict[str, float] | None) -> tuple[np.ndarray, dict[str, float]]:
-    """Linear pool with learned weights; equal weights over statistical models if unvalidated."""
+    """Pool with learned weights; equal-weight linear pool over statistical models if unvalidated.
+
+    Versions learned since the log pool was introduced carry LOG_POOL_MARKER; older
+    deployed versions keep the linear pool their weights were learned for. The
+    returned weights are each component's share of the total, for display.
+    """
+    if weights and LOG_POOL_MARKER in weights:
+        pool = LogPool.from_dict(weights)
+        used = {c: w for c, w in zip(pool.components, pool.weights, strict=True) if c in probs}
+        total = sum(used.values())
+        shares = {c: w / total for c, w in used.items()} if total else {c: 1 / len(used) for c in used}
+        return pool.combine(probs), shares
     weights = {k: v for k, v in (weights or {}).items() if not k.startswith("_")}
     if weights:
         pool = LinearPool(list(weights), np.array(list(weights.values())))

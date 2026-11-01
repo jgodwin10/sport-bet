@@ -189,6 +189,9 @@ class TopPickRecord(BaseModel):
 class TopPicks(BaseModel):
     generated_at: datetime
     days: int
+    day: Literal["today", "tomorrow"] | None = None
+    window_start: datetime
+    window_end: datetime
     ai_configured: bool
     items: list[TopPickRow]
 

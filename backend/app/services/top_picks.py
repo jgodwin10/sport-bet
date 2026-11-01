@@ -60,7 +60,12 @@ def ai_view(a: AiAnalysis, s: Selection, prediction_id: int) -> dict:
             "current": a.prediction_id == prediction_id}
 
 
-def top_picks(db: Session, now: datetime, limit: int = 10, days: int = 7) -> list[TopPick]:
+def top_picks(db: Session, now: datetime, limit: int = 10, days: int = 7,
+              start: datetime | None = None, end: datetime | None = None) -> list[TopPick]:
+    """Best pick per match kicking off in [start, end), default the next `days` days.
+    The window never reaches back before `now`."""
+    lower = max(now, start) if start else now
+    upper = end or now + timedelta(days=days)
     ht, at = aliased(Team), aliased(Team)
     rows = db.execute(
         select(Selection, Prediction, Fixture, Competition.code, ht, at)
@@ -69,7 +74,7 @@ def top_picks(db: Session, now: datetime, limit: int = 10, days: int = 7) -> lis
         .join(Competition, Competition.id == Fixture.competition_id)
         .join(ht, ht.id == Fixture.home_team_id).join(at, at.id == Fixture.away_team_id)
         .where(Prediction.id.in_(latest_prediction_ids()), Fixture.status == "scheduled",
-               Fixture.kickoff_utc > now, Fixture.kickoff_utc < now + timedelta(days=days),
+               Fixture.kickoff_utc > lower, Fixture.kickoff_utc < upper,
                Selection.expected_value > 0)
     )
     best: dict[int, TopPick] = {}

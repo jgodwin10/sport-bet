@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
@@ -88,13 +89,30 @@ def list_predictions(
     return Page(items=items, total=total or 0, page=page, page_size=page_size)
 
 
+def day_window(day: str, tz: str, now: datetime) -> tuple[datetime, datetime]:
+    """UTC bounds of the viewer's local calendar day (today or tomorrow) in `tz`."""
+    try:
+        zone = ZoneInfo(tz)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise HTTPException(422, f"unknown time zone: {tz}") from None
+    d = now.astimezone(zone).date() + timedelta(days=1 if day == "tomorrow" else 0)
+    start = datetime(d.year, d.month, d.day, tzinfo=zone)
+    nxt = d + timedelta(days=1)
+    end = datetime(nxt.year, nxt.month, nxt.day, tzinfo=zone)  # not start + 24h: DST days are 23/25h
+    return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
+
+
 @router.get("/top", response_model=TopPicks)
 def list_top_picks(db: Session = Depends(get_db), limit: int = Query(10, ge=1, le=25),
-                   days: int = Query(7, ge=1, le=14)) -> TopPicks:
+                   days: int = Query(7, ge=1, le=14),
+                   day: str | None = Query(default=None, pattern="^(today|tomorrow)$"),
+                   tz: str = Query("UTC", max_length=64)) -> TopPicks:
     now = datetime.now(timezone.utc)
-    picks = top_picks(db, now, limit=limit, days=days)
+    start, end = day_window(day, tz, now) if day else (now, now + timedelta(days=days))
+    picks = top_picks(db, now, limit=limit, start=start, end=end)
     return TopPicks(
-        generated_at=now, days=days, ai_configured=get_ai().configured,
+        generated_at=now, days=days, day=day, window_start=max(start, now), window_end=end,
+        ai_configured=get_ai().configured,
         items=[TopPickRow(**selection_row(t.selection, t.prediction, t.fixture, t.competition, t.home, t.away,
                                           None, now), rank=i, tier=t.tier, score=t.score, ai=t.ai)
                for i, t in enumerate(picks, 1)],

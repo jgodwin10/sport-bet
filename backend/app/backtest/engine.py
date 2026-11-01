@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from app.engine.decision import Candidate, ReliabilityInputs, SelectionRules, assess_reliability, evaluate_candidate
-from app.engine.ensemble import LinearPool, brier, calibration_bins, calibration_test, log_loss
+from app.engine.ensemble import LinearPool, LogPool, brier, calibration_bins, calibration_test, log_loss
 from app.engine.features import MatchRecord
 from app.engine.pipeline import (
     COMPONENTS_1X2, ModelSuite, SuiteConfig, combine_1x2, market_1x2, market_binary, outcome_index, rake_matrix,
@@ -115,8 +115,8 @@ def run_backtest(matches_by_comp: dict[str, list[BacktestMatch]], params: Backte
         end = min(step + timedelta(days=params.step_days), params.evaluate_to)
         weights = None
         if len(oos_outcomes) >= params.min_oos_for_weights:
-            pool = LinearPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
-                                                  np.array(oos_outcomes))
+            pool = LogPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
+                                               np.array(oos_outcomes))
             weights = pool.to_dict()
             if len(oos_over) >= params.min_oos_for_weights:
                 weights["_totals_market"] = _totals_weight(oos_over)
@@ -314,8 +314,8 @@ def summarise(rows, bets, oos, oos_outcomes, oos_over, weights_history, params: 
     # Final learned weights from *all* out-of-sample predictions: used for deployment
     learned = {}
     if len(oos_outcomes) >= params.min_oos_for_weights:
-        learned = LinearPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
-                                                  np.array(oos_outcomes)).to_dict()
+        learned = LogPool(COMPONENTS_1X2).fit({c: np.array(oos[c]) for c in COMPONENTS_1X2},
+                                               np.array(oos_outcomes)).to_dict()
     if len(oos_over) >= params.min_oos_for_weights:
         learned["_totals_market"] = _totals_weight(oos_over)
     result["learned_weights"] = learned

@@ -15,7 +15,7 @@ from app.engine.decision import (
 )
 from app.engine.dixon_coles import DixonColesModel, MatchObservation, UnknownTeamError
 from app.engine.elo import EloState, OrderedLogit1X2, season_of
-from app.engine.ensemble import LinearPool, brier, calibration_bins, calibration_test, disagreement, log_loss
+from app.engine.ensemble import LinearPool, LogPool, brier, calibration_bins, calibration_test, disagreement, log_loss
 from app.engine.features import FeatureBuilder, MatchRecord
 from app.engine.odds import (
     asian_handicap_ev, edge, expected_value, implied_probability, overround,
@@ -266,6 +266,41 @@ def test_linear_pool_prefers_better_component():
     pool = LinearPool(["good", "noisy"]).fit({"good": truth, "noisy": noisy}, outcomes)
     assert pool.weights[0] > pool.weights[1]
     assert pool.weights.sum() == pytest.approx(1.0)
+
+
+def test_log_pool_prefers_better_component_and_sharpens_underconfident_ones():
+    rng = np.random.default_rng(3)
+    n = 3000
+    truth = rng.dirichlet([4, 2.5, 3], size=n)
+    outcomes = np.array([rng.choice(3, p=p) for p in truth])
+    noisy = 0.5 * truth + 0.5 * rng.dirichlet([1, 1, 1], size=n)
+    pool = LogPool(["good", "noisy"]).fit({"good": truth, "noisy": noisy}, outcomes)
+    assert pool.weights[0] > pool.weights[1] >= 0
+    # truth ** 0.5 is too flat; a linear pool cannot undo that, the log pool learns a weight near 2
+    flat = truth ** 0.5 / (truth ** 0.5).sum(axis=1, keepdims=True)
+    sharp = LogPool(["flat"]).fit({"flat": flat}, outcomes)
+    assert sharp.weights[0] == pytest.approx(2.0, abs=0.3)
+    assert sharp.combine({"flat": flat}).sum(axis=1) == pytest.approx(np.ones(n))
+
+
+def test_log_pool_round_trips_and_combine_keeps_legacy_linear_weights():
+    from app.engine.pipeline import combine_1x2
+    pool = LogPool(["a", "b"], np.array([0.8, 0.4]), np.array([0.0, 0.1, -0.05]))
+    probs = {"a": np.array([0.5, 0.3, 0.2]), "b": np.array([0.4, 0.3, 0.3])}
+    d = pool.to_dict()
+    final, used = combine_1x2(probs, d)
+    assert final == pytest.approx(pool.combine(probs))
+    assert used == pytest.approx({"a": 2 / 3, "b": 1 / 3})
+    # a missing component's weight moves to the rest, so a lone component is pooled at the total weight
+    assert combine_1x2({"a": probs["a"]}, d)[0] == pytest.approx(LogPool(["a"], np.array([1.2]), pool.bias).combine(probs))
+    # zero-weight leftovers (no odds, market weight was everything) share the weight instead of vanishing
+    market_only = LogPool(["a", "market"], np.array([0.0, 1.1]), np.zeros(3)).to_dict()
+    final, used = combine_1x2({"a": probs["a"]}, market_only)
+    assert used == {"a": 1.0}
+    assert final == pytest.approx(LogPool(["a"], np.array([1.1])).combine({"a": probs["a"]}))
+    # weights from versions learned before the log pool are still combined linearly
+    final, _ = combine_1x2(probs, {"a": 0.5, "b": 0.5, "_totals_market": 0.3})
+    assert final == pytest.approx((probs["a"] + probs["b"]) / 2)
 
 
 def test_disagreement_and_metrics():

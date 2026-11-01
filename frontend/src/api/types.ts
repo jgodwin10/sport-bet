@@ -105,7 +105,8 @@ export const TopPick = SelectionRow.extend({
 });
 export type TopPick = z.infer<typeof TopPick>;
 export const TopPicks = z.object({
-  generated_at: z.string(), days: z.number(), ai_configured: z.boolean(), items: z.array(TopPick),
+  generated_at: z.string(), days: z.number(), day: z.enum(["today", "tomorrow"]).nullable().optional(),
+  window_start: z.string(), window_end: z.string(), ai_configured: z.boolean(), items: z.array(TopPick),
 });
 export type TopPicks = z.infer<typeof TopPicks>;
 
