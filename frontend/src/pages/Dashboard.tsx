@@ -114,7 +114,7 @@ function Hero({ f, days, day, onDay }: { f: Fixture; days: string[]; day: string
           {[f.home_team, null, f.away_team].map((t, i) => t ? (
             <Link key={i} to={`/teams?team=${t.id}`} className="flex min-w-0 flex-col items-center text-center">
               <TeamLogo name={t.name} src={t.logo_url} size={64} className="sm:!w-[104px] sm:!h-[104px]" />
-              <span className="mt-3 w-full text-[15px] sm:text-[26px] font-extrabold leading-tight [hyphens:auto] [overflow-wrap:anywhere]">{t.name}</span>
+              <span className="mt-3 hidden sm:block w-full text-[26px] font-extrabold leading-tight">{t.name}</span>
             </Link>
           ) : (
             <div key="mid" className="flex flex-col items-center gap-2 sm:gap-3 text-center">
@@ -129,7 +129,11 @@ function Hero({ f, days, day, onDay }: { f: Fixture; days: string[]; day: string
             </div>
           ))}
         </div>
-        <div className="flex justify-center sm:hidden"><Countdown to={f.kickoff_utc} className="mt-3" /></div>
+        {/* On phones the names get their own row, half the card each, so long names wrap between words. */}
+        <div className="sm:hidden mt-3 grid grid-cols-2 gap-6 px-4 text-center">
+          {[f.home_team, f.away_team].map((t) => <span key={t.id} className="text-[15px] font-extrabold leading-tight">{t.name}</span>)}
+        </div>
+        <div className="flex justify-center sm:hidden"><Countdown to={f.kickoff_utc} className="mt-4" /></div>
 
         {r && (
           <div className="px-4 sm:px-8 pt-6 pb-5">

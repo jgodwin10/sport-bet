@@ -94,8 +94,8 @@ function Hero({ a }: { a: Analysis }) {
           {[f.home_team, null, f.away_team].map((t, i) => t ? (
             <Link key={t.id} to={`/teams?team=${t.id}`} className="flex flex-col items-center min-w-0 text-center">
               <TeamLogo name={t.name} src={t.logo_url} size={64} className="sm:!w-[104px] sm:!h-[104px]" />
-              <h1 className="mt-3 w-full text-[15px] sm:text-[26px] font-extrabold leading-tight [overflow-wrap:anywhere]">{t.name}</h1>
-              <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">{i === 0 ? "Home" : "Away"}</span>
+              <h1 className="mt-3 hidden sm:block w-full text-[26px] font-extrabold leading-tight">{t.name}</h1>
+              <span className="mt-1 hidden sm:block text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">{i === 0 ? "Home" : "Away"}</span>
             </Link>
           ) : (
             <div key="mid" className="flex flex-col items-center gap-2 sm:gap-3 text-center">
@@ -107,6 +107,14 @@ function Hero({ a }: { a: Analysis }) {
                   {f.score ? `${f.score.home} - ${f.score.away}` : fmtTime(f.kickoff_utc).split(" ")[0]}
                 </span>
               </Hex>
+            </div>
+          ))}
+        </div>
+        <div className="sm:hidden mt-3 grid grid-cols-2 gap-6 px-4 text-center">
+          {[f.home_team, f.away_team].map((t, i) => (
+            <div key={t.id}>
+              <div className="text-[15px] font-extrabold leading-tight">{t.name}</div>
+              <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-4">{i === 0 ? "Home" : "Away"}</div>
             </div>
           ))}
         </div>

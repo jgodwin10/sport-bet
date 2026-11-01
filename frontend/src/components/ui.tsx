@@ -343,10 +343,10 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
   if (variant === "tabs") {
     return (
       <div role="tablist" aria-label={label}
-           className={cx("flex w-full sm:w-auto sm:inline-flex max-w-full gap-1 rounded-full border border-white/[0.07] bg-bg/50 p-1.5 scroll-x", className)}>
+           className={cx("flex w-full sm:w-auto sm:inline-flex max-w-full gap-0.5 min-[400px]:gap-1 rounded-full border border-white/[0.07] bg-bg/50 p-1 min-[400px]:p-1.5 scroll-x", className)}>
         {options.map((o) => (
           <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                  className={cx("h-10 flex-1 sm:flex-none shrink-0 rounded-full px-5 text-sm font-semibold whitespace-nowrap transition-all",
+                  className={cx("h-10 flex-1 sm:flex-none shrink-0 rounded-full px-2.5 min-[400px]:px-5 text-[13px] min-[400px]:text-sm font-semibold whitespace-nowrap transition-all",
                                 value === o.value ? "bg-gradient-to-b from-brand-2 to-brand text-white glow-blue" : "text-ink-3 hover:text-ink")}>
             {o.label}
           </button>

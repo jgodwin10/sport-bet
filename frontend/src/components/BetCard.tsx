@@ -46,7 +46,7 @@ export function BetCard({ r, rank, status, children, highlight }: {
         {[home, null, away].map((t, i) => t !== null ? (
           <div key={i} className="flex min-w-0 flex-col items-center gap-2 text-center">
             <TeamLogo name={t?.name ?? ""} src={t?.logo_url} size={52} />
-            <span className="w-full line-clamp-2 text-[13px] font-semibold leading-snug [overflow-wrap:anywhere]">{t?.name}</span>
+            <span className="w-full line-clamp-2 text-xs font-semibold leading-snug">{t?.name}</span>
           </div>
         ) : (
           <div key="odds" className="flex flex-col items-center gap-1">
