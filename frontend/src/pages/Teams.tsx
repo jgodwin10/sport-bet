@@ -6,7 +6,8 @@ import { api } from "../api/client";
 import { useCompetitions, useTeamStats } from "../api/hooks";
 import { Icon } from "../components/icons";
 import {
-  AXIS, Card, ChartTooltip, cx, Empty, ErrorState, FormPills, Loading, PageHeader, Pill, Segmented, SERIES, StatTile, TeamLogo,
+  Card, chart, ChartTooltip, Empty, ErrorState, FormPills, Legend, Loading, PageHeader, Pill, ResultLine, SearchInput, StatTile,
+  TeamLogo, useColorScheme,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, num } from "../lib/format";
 
@@ -29,27 +30,25 @@ function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
   });
   return (
     <>
-      <PageHeader title="Teams" description="Form, ratings and results for every club we track. Tap a crest to open the team." />
-      <div className="space-y-3 mb-6">
-        <div className="relative sm:w-80">
-          <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-4" />
-          <input className="input pl-10" placeholder="Search all teams" aria-label="Search all teams" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </div>
+      <PageHeader title="Teams" description="Form, ratings and results for every club we track." />
+      <div className="mb-6 flex gap-2">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search all teams" className="flex-1" />
         {!search && (
-          <Segmented variant="chips" label="League" value={league} onChange={setLeague} className="fade-edges -mx-4 px-4 sm:mx-0 sm:px-0"
-                     options={(comps.data ?? []).map((c) => ({ value: c.code, label: c.name }))} />
+          <select className="input w-auto max-w-[45%] sm:max-w-[240px]" aria-label="League" value={league} onChange={(e) => setLeague(e.target.value)}>
+            {(comps.data ?? []).map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+          </select>
         )}
       </div>
       {teams.isLoading ? <Card><Loading rows={4} /></Card> : teams.isError ? <ErrorState error={teams.error} onRetry={teams.refetch} /> : !teams.data?.length ? (
         <Card><Empty title="No teams found" icon="shield">Try a different search or league.</Empty></Card>
       ) : (
-        <ul className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 xl:grid-cols-6 gap-2.5 sm:gap-3">
-          {teams.data.map((t, i) => (
-            <li key={t.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(i, 20) * 20}ms` }}>
+        <ul className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+          {teams.data.map((t) => (
+            <li key={t.id} className="min-w-0">
               <button onClick={() => onSelect(t.id)}
-                      className="card w-full h-full flex flex-col items-center gap-2.5 px-2 py-4 text-center transition-colors hover:border-line-strong hover:bg-night-3">
-                <TeamLogo name={t.name} src={t.logo_url} size={44} className="sm:!w-14 sm:!h-14" />
-                <span className="text-[12.5px] sm:text-[13.5px] font-semibold leading-tight line-clamp-2">{t.name}</span>
+                      className="w-full h-full flex flex-col items-center gap-2 rounded-2xl px-2 py-4 text-center transition-colors hover:bg-surface hover:shadow-sm">
+                <TeamLogo name={t.name} src={t.logo_url} size={44} />
+                <span className="w-full text-[13px] font-medium leading-tight line-clamp-2 break-words">{t.name}</span>
               </button>
             </li>
           ))}
@@ -60,6 +59,8 @@ function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
 }
 
 function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
+  useColorScheme();
+  const c = chart();
   const q = useTeamStats(id);
   if (q.isLoading) return <Card><Loading rows={5} /></Card>;
   if (q.isError) return <ErrorState error={q.error} onRetry={q.refetch} />;
@@ -72,95 +73,80 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
   const eloPrev = d.elo_history.length > 10 ? d.elo_history[d.elo_history.length - 11].rating : null;
   return (
     <>
-      <button onClick={onBack} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-3 hover:text-ink mb-4">
-        <Icon name="chevronLeft" size={16} />All teams
+      <button onClick={onBack} className="mb-5 inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink">
+        <Icon name="chevronLeft" size={15} />All teams
       </button>
 
-      <section className="card relative overflow-hidden p-5 sm:p-8 mb-4 sm:mb-6">
-        <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-brand" />
-        <div className="relative flex flex-col sm:flex-row items-center sm:items-center gap-5 text-center sm:text-left">
-          <TeamLogo name={d.team.name} src={d.team.logo_url} size={80} className="sm:!w-24 sm:!h-24" />
-          <div className="min-w-0">
-            <h1 className="h-page">{d.team.name}</h1>
-            <div className="mt-3 flex flex-wrap items-center justify-center sm:justify-start gap-3">
-              <FormPills seq={d.form.sequence} max={10} size={22} />
-              <span className="text-xs text-ink-3">last 10, newest first</span>
-            </div>
+      <header className="mb-6 flex items-center gap-4 min-w-0">
+        <TeamLogo name={d.team.name} src={d.team.logo_url} size={60} />
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight leading-tight">{d.team.name}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <FormPills seq={d.form.sequence} max={10} size={18} />
+            <span className="text-xs text-ink-4">newest first</span>
           </div>
         </div>
-      </section>
+      </header>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 mb-4 sm:mb-6">
-        <StatTile label="Points per game" value={num(l10?.points_per_game)} hint={l10 ? `${l10.wins} won · ${l10.draws} drawn · ${l10.losses} lost` : undefined} />
-        <StatTile label="Goals (last 10)" value={l10 ? `${l10.goals_for}–${l10.goals_against}` : "—"} hint={`${l10?.clean_sheets ?? 0} clean sheets`} />
-        <StatTile label="Home / away PPG" value={`${num(d.form.home?.points_per_game, 1)} / ${num(d.form.away?.points_per_game, 1)}`} hint="last 10 at each venue" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <StatTile label="Points per game" value={num(l10?.points_per_game)} hint={l10 ? `${l10.wins}W ${l10.draws}D ${l10.losses}L, last 10` : undefined} />
+        <StatTile label="Goals, last 10" value={l10 ? `${l10.goals_for}–${l10.goals_against}` : "—"} hint={`${l10?.clean_sheets ?? 0} clean sheets`} />
+        <StatTile label="Home / away PPG" value={`${num(d.form.home?.points_per_game, 1)} / ${num(d.form.away?.points_per_game, 1)}`} />
         <StatTile label="Strength rating" value={elo ? num(elo, 0) : "—"} tone={elo && eloPrev ? (elo >= eloPrev ? "pos" : "neg") : undefined}
-                  hint={elo && eloPrev ? `${elo >= eloPrev ? "▲" : "▼"} ${num(Math.abs(elo - eloPrev), 0)} over 10 matches` : "Elo rating"} />
+                  hint={elo && eloPrev ? `${elo >= eloPrev ? "+" : "−"}${num(Math.abs(elo - eloPrev), 0)} over 10 matches` : "Elo rating"} />
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2 mb-4 sm:mb-6">
+      <div className="grid gap-6 lg:grid-cols-2 mb-6">
         <Card title={hasXg ? "Chances created vs allowed (xG)" : "Goals scored vs conceded"} subtitle={`Last ${trend.length} matches`}>
-          <div className="flex gap-4 text-xs text-ink-2 mb-3">
-            <span className="flex items-center gap-1.5"><span className="h-1 w-4 rounded-full" style={{ background: SERIES[0] }} />{hasXg ? "Created" : "Scored"}</span>
-            <span className="flex items-center gap-1.5"><span className="h-1 w-4 rounded-full" style={{ background: SERIES[1] }} />{hasXg ? "Allowed" : "Conceded"}</span>
-          </div>
-          <div className="h-52">
+          <Legend items={[[hasXg ? "Created" : "Scored", c.series[0]], [hasXg ? "Allowed" : "Conceded", c.series[1]]]} />
+          <div className="h-48">
             <ResponsiveContainer>
-              <LineChart data={trend.map((x: any) => ({ date: fmtDate(x.date), for: hasXg ? x.xg_for : x.goals_for, against: hasXg ? x.xg_against : x.goals_against }))} margin={{ left: -18, right: 8, top: 4 }}>
-                <CartesianGrid stroke={AXIS.grid} vertical={false} />
-                <XAxis dataKey="date" stroke={AXIS.stroke} fontSize={10} tickLine={false} axisLine={false} minTickGap={28} />
-                <YAxis stroke={AXIS.stroke} fontSize={AXIS.fontSize} axisLine={false} tickLine={false} />
+              <LineChart data={trend.map((x: any) => ({ date: fmtDate(x.date), for: hasXg ? x.xg_for : x.goals_for, against: hasXg ? x.xg_against : x.goals_against }))} margin={{ left: -24, right: 4, top: 4 }}>
+                <CartesianGrid stroke={c.grid} vertical={false} />
+                <XAxis dataKey="date" stroke={c.axis} fontSize={10} tickLine={false} axisLine={false} minTickGap={32} />
+                <YAxis stroke={c.axis} fontSize={c.fontSize} axisLine={false} tickLine={false} />
                 <Tooltip content={<ChartTooltip fmt={(v) => num(v)} />} />
-                <Line isAnimationActive={false} dataKey="for" name={hasXg ? "Created" : "Scored"} stroke={SERIES[0]} strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0, fill: SERIES[0] }} connectNulls />
-                <Line isAnimationActive={false} dataKey="against" name={hasXg ? "Allowed" : "Conceded"} stroke={SERIES[1]} strokeWidth={2.5} dot={{ r: 3, strokeWidth: 0, fill: SERIES[1] }} connectNulls />
+                <Line isAnimationActive={false} dataKey="for" name={hasXg ? "Created" : "Scored"} stroke={c.series[0]} strokeWidth={2} dot={false} connectNulls />
+                <Line isAnimationActive={false} dataKey="against" name={hasXg ? "Allowed" : "Conceded"} stroke={c.series[1]} strokeWidth={2} dot={false} connectNulls />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card title="Strength over time" subtitle="Elo rating within its league — higher is stronger">
-          <div className="h-[236px]">
+        <Card title="Strength over time" subtitle="Elo rating within its league; higher is stronger">
+          <div className="h-[212px]">
             <ResponsiveContainer>
-              <LineChart data={d.elo_history} margin={{ left: -6, right: 8, top: 4 }}>
-                <CartesianGrid stroke={AXIS.grid} vertical={false} />
-                <XAxis dataKey="date" stroke={AXIS.stroke} fontSize={10} tickLine={false} axisLine={false} minTickGap={48} />
-                <YAxis stroke={AXIS.stroke} fontSize={AXIS.fontSize} axisLine={false} tickLine={false} domain={["auto", "auto"]} width={42} />
+              <LineChart data={d.elo_history} margin={{ left: -12, right: 4, top: 4 }}>
+                <CartesianGrid stroke={c.grid} vertical={false} />
+                <XAxis dataKey="date" stroke={c.axis} fontSize={10} tickLine={false} axisLine={false} minTickGap={48} />
+                <YAxis stroke={c.axis} fontSize={c.fontSize} axisLine={false} tickLine={false} domain={["auto", "auto"]} width={42} />
                 <Tooltip content={<ChartTooltip fmt={(v) => num(v, 0)} />} />
-                <Line isAnimationActive={false} dataKey="rating" name="Rating" stroke={SERIES[2]} strokeWidth={2.5} dot={false} />
+                <Line isAnimationActive={false} dataKey="rating" name="Rating" stroke={c.series[2]} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Card>
       </div>
 
-      <div className="grid gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] items-start">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] items-start">
         <Card title="Results" subtitle="Most recent first" flush>
           <ul className="divide-soft max-h-[520px] overflow-y-auto">
             {d.matches.map((m: any) => (
-              <li key={m.fixture_id} className="flex items-center gap-3 px-5 sm:px-6 py-3 text-[13.5px]">
-                <FormPills seq={m.result} max={1} size={24} />
-                <TeamLogo name={m.opponent} src={m.opponent_logo} size={24} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{m.venue === "H" ? "vs" : "at"} {m.opponent}</span>
-                  <span className="block text-2xs text-ink-4">{fmtDate(m.date)}{m.xg_for !== null && ` · xG ${num(m.xg_for, 1)}–${num(m.xg_against, 1)}`}</span>
-                </span>
-                <span className="num font-extrabold">{m.goals_for}–{m.goals_against}</span>
-              </li>
+              <ResultLine key={m.fixture_id} m={m} extra={m.xg_for !== null ? ` · xG ${num(m.xg_for, 1)}–${num(m.xg_against, 1)}` : undefined} />
             ))}
           </ul>
         </Card>
-        <div className="space-y-6">
-          <Card title="Next matches">
-            {d.upcoming.length === 0 ? <p className="text-[14px] text-ink-3">No upcoming fixtures yet.</p> : (
-              <ul className="space-y-2">
+        <div className="space-y-6 min-w-0">
+          <Card title="Next matches" flush>
+            {d.upcoming.length === 0 ? <p className="px-4 sm:px-5 pb-5 text-sm text-ink-3">No upcoming fixtures yet.</p> : (
+              <ul className="divide-soft">
                 {d.upcoming.map((u: any) => (
                   <li key={u.fixture_id}>
-                    <Link to={`/match/${u.fixture_id}`} className="flex items-center gap-3 glass-inset px-3.5 py-3 hover:bg-white/[0.08] transition-colors">
-                      <span className="flex -space-x-1.5 shrink-0"><TeamLogo name={u.home_team} src={u.home_logo} size={24} /><TeamLogo name={u.away_team} src={u.away_logo} size={24} /></span>
+                    <Link to={`/match/${u.fixture_id}`} className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-subtle/60 transition-colors">
                       <span className="min-w-0 flex-1">
-                        <span className="block text-[13.5px] font-semibold truncate">{u.home_team} v {u.away_team}</span>
-                        <span className="block text-2xs text-ink-4">{fmtDateTime(u.kickoff_utc)}</span>
+                        <span className="block text-sm truncate">{u.home_team} v {u.away_team}</span>
+                        <span className="block text-xs text-ink-4">{fmtDateTime(u.kickoff_utc)}</span>
                       </span>
-                      <Icon name="chevronRight" size={16} className="text-ink-4 shrink-0" />
+                      <Icon name="chevronRight" size={15} className="text-ink-4 shrink-0" />
                     </Link>
                   </li>
                 ))}
@@ -168,10 +154,10 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
             )}
           </Card>
           <Card title="Availability">
-            {d.availability.length === 0 ? <p className="text-[14px] text-ink-3">No injury or suspension reports stored.</p> : (
+            {d.availability.length === 0 ? <p className="text-sm text-ink-3">No injury or suspension reports.</p> : (
               <ul className="space-y-2">
                 {d.availability.map((a: any, i: number) => (
-                  <li key={i} className={cx("flex items-center justify-between gap-3 text-[13.5px]")}>
+                  <li key={i} className="flex items-center justify-between gap-3 text-sm">
                     <span className="truncate">{a.player}</span><Pill tone={a.kind === "doubtful" ? "warn" : "neg"}>{a.kind}</Pill>
                   </li>
                 ))}

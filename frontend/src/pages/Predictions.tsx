@@ -2,12 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { usePredictions, type PredictionFilters } from "../api/hooks";
 import type { SelectionRow } from "../api/types";
+import { BetCard, BetStatus } from "../components/BetCard";
 import { Icon } from "../components/icons";
-import {
-  Card, cx, Empty, ErrorState, Freshness, Loading, MetricStrip, PageHeader, Pager, Pill, ReliabilityBadge, Segmented, TeamLogo,
-} from "../components/ui";
-import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
-import { friendlyReason, GLOSSARY, selectionLabel } from "../lib/language";
+import { Card, cx, Empty, ErrorState, Loading, PageHeader, Pager, SearchInput, Segmented } from "../components/ui";
+import { signedPct } from "../lib/format";
+import { friendlyReason } from "../lib/language";
 
 const MARKETS = [
   { value: "all", label: "All markets", api: undefined },
@@ -39,35 +38,31 @@ export default function Predictions() {
 
   return (
     <>
-      <PageHeader title="Value picks"
+      <Link to="/top" className="mb-4 inline-flex items-center gap-1 text-sm text-ink-3 hover:text-ink">
+        <Icon name="chevronLeft" size={15} />Top picks
+      </Link>
+      <PageHeader title="All bets"
                   description={recommendedOnly
-                    ? "Bets where a bookmaker's price beats our estimated chance and every safety check passes."
-                    : "Every bet we priced, including the ones we rejected and why."} />
+                    ? "Bets where a bookmaker's price beats our estimate and every safety check passes."
+                    : "Every bet we priced, including the ones we rejected and why."}
+                  actions={<Segmented label="Status" value={status} onChange={(v) => reset(() => setStatus(v))}
+                                      options={[{ value: "upcoming", label: "Upcoming" }, { value: "settled", label: "Results" }]} />} />
 
-      <div className="space-y-3 mb-6">
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented label="Status" value={status} onChange={(v) => reset(() => setStatus(v))}
-                     options={[{ value: "upcoming", label: "Upcoming" }, { value: "settled", label: "Results" }]} />
+      <div className="mb-6 space-y-2">
+        <SearchInput value={search} onChange={(v) => reset(() => setSearch(v))} />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center">
+          <select className="input sm:w-48" aria-label="Market" value={market} onChange={(e) => reset(() => setMarket(e.target.value as typeof market))}>
+            {MARKETS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+          </select>
+          <select className="input sm:w-40" aria-label="Sort by" value={sort} onChange={(e) => reset(() => setSort(e.target.value))}>
+            {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
           {status === "upcoming" && (
             <button role="switch" aria-checked={showAll} onClick={() => reset(() => setShowAll(!showAll))}
-                    className={cx("btn h-10", showAll && "border-brand/60 text-brand")}>
-              <Icon name={showAll ? "check" : "filter"} size={15} />{showAll ? "Showing every bet checked" : "Show every bet checked"}
+                    className={cx("btn col-span-2 sm:ml-auto", showAll && "bg-subtle")}>
+              <Icon name={showAll ? "check" : "filter"} size={15} />Include rejected bets
             </button>
           )}
-          <div className="relative w-full sm:w-64 sm:ml-auto">
-            <Icon name="search" size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-4" />
-            <input className="input h-10 pl-10" placeholder="Find a team" aria-label="Find a team" value={search} onChange={(e) => reset(() => setSearch(e.target.value))} />
-          </div>
-        </div>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
-          <Segmented variant="chips" label="Market" value={market} onChange={(v) => reset(() => setMarket(v))} className="fade-edges -mx-4 px-4 sm:mx-0 sm:px-0"
-                     options={MARKETS.map((m) => ({ value: m.value, label: m.label }))} />
-          <label className="flex items-center gap-2 text-[13px] text-ink-3 shrink-0">
-            Sort by
-            <select className="input h-9 w-auto text-[13px] font-semibold" value={sort} onChange={(e) => reset(() => setSort(e.target.value))}>
-              {SORTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </label>
         </div>
       </div>
 
@@ -78,18 +73,18 @@ export default function Predictions() {
             {recommendedOnly ? (
               <Empty title="No value picks right now" icon="ban"
                      action={<button className="btn btn-primary" onClick={() => reset(() => setShowAll(true))}>See every bet we checked</button>}>
-                Our estimates are close to the bookmakers' prices, so nothing is worth recommending. That's normal — bookmakers are hard to beat, and holding back protects you.
+                Our estimates are close to the bookmakers' prices, so nothing is worth recommending. That's normal: bookmakers are hard to beat.
               </Empty>
             ) : (
-              <Empty title={status === "settled" ? "No results yet" : "No selections match these filters"} icon="target">
+              <Empty title={status === "settled" ? "No results yet" : "No bets match these filters"} icon="target">
                 {status === "settled" ? "Settled bets appear here after matches finish." : "Try a different market or clear the search."}
               </Empty>
             )}
           </Card>
         ) : (
           <>
-            <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {q.data.items.map((r, i) => <PickCard key={r.selection_id} r={r} delay={i} />)}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {q.data.items.map((r) => <div key={r.selection_id} className="min-w-0"><BetCard r={r} status={<RowStatus r={r} />} /></div>)}
             </div>
             <Pager page={q.data.page} pageSize={q.data.page_size} total={q.data.total} onPage={setPage} />
           </>
@@ -98,50 +93,15 @@ export default function Predictions() {
   );
 }
 
-function PickCard({ r, delay }: { r: SelectionRow; delay: number }) {
-  const home = r.home_team?.name, away = r.away_team?.name;
-  const settled = r.status === "settled";
-  return (
-    <Link to={`/match/${r.fixture_id}`} style={{ animationDelay: `${Math.min(delay, 12) * 30}ms` }}
-          className={cx("card group flex flex-col p-3.5 sm:p-4 transition-colors hover:border-line-strong animate-fade-up",
-                        r.qualifies && !settled && "border-pos/40")}>
-      <div className="flex items-center gap-1.5 min-w-0">
-        <span className="flex -space-x-1 shrink-0">
-          <TeamLogo name={home ?? ""} src={r.home_team?.logo_url} size={18} />
-          <TeamLogo name={away ?? ""} src={r.away_team?.logo_url} size={18} />
-        </span>
-        <span className="truncate text-[13px] font-semibold text-ink-2">{r.match}</span>
-      </div>
-      <div className="mt-0.5 truncate text-2xs text-ink-4">{r.competition} · {fmtDateTime(r.kickoff_utc)}</div>
-
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <div className="min-w-0 text-[16px] font-bold leading-tight">{selectionLabel(r.market, r.selection, home, away)}</div>
-        <div className="shrink-0 text-right">
-          <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-ink-4">Odds</div>
-          <div className="display num text-[28px]">{odds(r.odds)}</div>
-        </div>
-      </div>
-
-      <MetricStrip items={[
-        ["Our chance", pct(r.probability, 0)],
-        ["Bookmaker", pct(r.implied_probability, 0)],
-        ["Value", signedPct(r.expected_value), r.expected_value > 0 ? "pos" : undefined, GLOSSARY.value],
-      ]} />
-
-      <div className="mt-3 pt-2.5 border-t border-line flex flex-wrap items-center justify-between gap-2">
-        {settled ? (
-          <Pill tone={r.profit! > 0 ? "pos" : r.profit! < 0 ? "neg" : "neutral"}>{r.outcome} · {signedPct(r.profit)}</Pill>
-        ) : r.qualifies ? (
-          <Pill tone="pos" icon="check">Recommended</Pill>
-        ) : (
-          <span className="min-w-0 flex-1 text-xs text-ink-4 line-clamp-1" title={r.rejection_reasons.map(friendlyReason).join("\n")}>{friendlyReason(r.rejection_reasons[0])}</span>
-        )}
-        <span className="flex items-center gap-3">
-          <ReliabilityBadge score={r.reliability_score} label={r.reliability_label} compact />
-          {!settled && <Freshness hours={r.odds_age_hours} label="" />}
-          {settled && r.clv !== null && <span className="text-2xs text-ink-4 num">CLV {signedPct(r.clv)}</span>}
-        </span>
-      </div>
-    </Link>
-  );
+function RowStatus({ r }: { r: SelectionRow }) {
+  if (r.status === "settled") {
+    const tone = r.profit! > 0 ? "text-pos" : r.profit! < 0 ? "text-neg" : "text-ink-2";
+    return (
+      <span className="flex flex-wrap items-center gap-x-2">
+        <span className={cx("font-medium capitalize", tone)}>{r.outcome?.replace("_", " ")} · {signedPct(r.profit)}</span>
+        {r.clv !== null && <span className="num">CLV {signedPct(r.clv)}</span>}
+      </span>
+    );
+  }
+  return <BetStatus ok={r.qualifies} warnLabel="Not recommended" reason={r.rejection_reasons[0] && friendlyReason(r.rejection_reasons[0])} />;
 }
