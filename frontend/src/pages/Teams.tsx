@@ -7,7 +7,7 @@ import { useCompetitions, useTeamStats } from "../api/hooks";
 import { Icon } from "../components/icons";
 import {
   Card, chart, ChartTooltip, Empty, ErrorState, FormPills, Legend, Loading, PageHeader, Pill, ResultLine, SearchInput, StatTile,
-  TeamLogo, useColorScheme,
+  TeamLogo,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, num } from "../lib/format";
 
@@ -59,7 +59,6 @@ function TeamGrid({ onSelect }: { onSelect: (id: number) => void }) {
 }
 
 function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
-  useColorScheme();
   const c = chart();
   const q = useTeamStats(id);
   if (q.isLoading) return <Card><Loading rows={5} /></Card>;
@@ -115,10 +114,10 @@ function TeamDetail({ id, onBack }: { id: number; onBack: () => void }) {
         <Card title="Strength over time" subtitle="Elo rating within its league; higher is stronger">
           <div className="h-[212px]">
             <ResponsiveContainer>
-              <LineChart data={d.elo_history} margin={{ left: -12, right: 4, top: 4 }}>
+              <LineChart data={d.elo_history} margin={{ left: 0, right: 4, top: 4 }}>
                 <CartesianGrid stroke={c.grid} vertical={false} />
-                <XAxis dataKey="date" stroke={c.axis} fontSize={10} tickLine={false} axisLine={false} minTickGap={48} />
-                <YAxis stroke={c.axis} fontSize={c.fontSize} axisLine={false} tickLine={false} domain={["auto", "auto"]} width={42} />
+                <XAxis dataKey="date" stroke={c.axis} fontSize={10} tickLine={false} axisLine={false} minTickGap={48} tickFormatter={(v) => fmtDate(v)} />
+                <YAxis stroke={c.axis} fontSize={c.fontSize} axisLine={false} tickLine={false} domain={["auto", "auto"]} width={36} tickFormatter={(v) => num(v, 0)} />
                 <Tooltip content={<ChartTooltip fmt={(v) => num(v, 0)} />} />
                 <Line isAnimationActive={false} dataKey="rating" name="Rating" stroke={c.series[2]} strokeWidth={2} dot={false} />
               </LineChart>

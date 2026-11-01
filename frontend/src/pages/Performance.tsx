@@ -7,7 +7,7 @@ import { useAdminAction, useBacktest, useBacktests, useCompetitions, useMe, useM
 import { Icon } from "../components/icons";
 import {
   Card, chart, ChartTooltip, cx, Disclosure, Empty, ErrorState, Field, Legend, Loading, PageHeader, Pill, SectionTitle, Sheet,
-  StatTile, useColorScheme,
+  StatTile,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, marketLabel, num, pct, signedPct } from "../lib/format";
 import { GLOSSARY } from "../lib/language";
@@ -119,7 +119,7 @@ function Verdict({ m }: { m: any }) {
     : "The model does not beat the bookmakers yet.";
   const checks = [
     { ok: beats, title: beats ? "More accurate than bookmakers" : "Less accurate than bookmakers",
-      text: `Forecast score ${num(ens, 3)} vs ${num(mkt, 3)} (lower is better)`, info: GLOSSARY.logloss },
+      text: ens !== undefined && mkt !== undefined ? `Forecast score ${num(ens, 3)} vs ${num(mkt, 3)} (lower is better)` : "Not enough matches to compare yet", info: GLOSSARY.logloss },
     { ok: calibrated.length > 0, title: calibrated.length ? "Probabilities are honest" : "Probabilities need work",
       text: calibrated.length ? `Honest for: ${calibrated.map(marketLabel).join(", ")}` : "No market passed the calibration test", info: GLOSSARY.calibrated },
     { ok: edge, title: edge ? "Profitable on history" : "Not profitable on history",
@@ -153,7 +153,6 @@ function Verdict({ m }: { m: any }) {
 const NAMES: Record<string, string> = { market: "Bookmakers", ensemble: "Our blend", dixon_coles: "Goals model", elo: "Ratings model", feature_model: "Form model", base_rates: "Guessing base rates" };
 
 function Evidence({ m }: { m: any }) {
-  useColorScheme();
   const c = chart();
   const b = m.betting ?? {};
   const comp = m.one_x_two.comparison_common_subset ?? {};
@@ -180,7 +179,7 @@ function Evidence({ m }: { m: any }) {
                   <YAxis stroke={c.axis} fontSize={c.fontSize} axisLine={false} tickLine={false} />
                   <ReferenceLine y={0} stroke={c.axis} strokeDasharray="3 3" />
                   <Tooltip content={<ChartTooltip fmt={(v) => `${num(v, 1)} units`} />} />
-                  <Line isAnimationActive={false} dataKey="cumulative_profit" name="Running profit" stroke={c.series[0]} strokeWidth={2} dot={false} />
+                  <Line isAnimationActive={false} dataKey="cumulative_profit" name="Running profit" stroke={c.series[2]} strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -188,7 +187,7 @@ function Evidence({ m }: { m: any }) {
         )}
       </section>
 
-      <Card title="Who forecasts best?" subtitle="Forecast score on the same matches; longer bar is better" info={GLOSSARY.logloss}>
+      {ranked.length > 0 && <Card title="Who forecasts best?" subtitle="Forecast score on the same matches; longer bar is better" info={GLOSSARY.logloss}>
         <ul className="space-y-3.5">
           {ranked.map(([k, v], i) => (
             <li key={k}>
@@ -197,19 +196,18 @@ function Evidence({ m }: { m: any }) {
                 <span className="shrink-0 num text-xs text-ink-3">{num(v.log_loss, 3)} · {pct(v.accuracy, 0)} right</span>
               </div>
               <div className="mt-1.5 h-1.5 rounded-full bg-subtle overflow-hidden">
-                <div className={cx("h-full rounded-full", k === "ensemble" ? "bg-ink" : "bg-ink-4/60")}
+                <div className={cx("h-full rounded-full", k === "ensemble" ? "bg-gradient-to-r from-brand to-brand-2" : k === "market" ? "bg-ink-3" : "bg-ink-4/60")}
                      style={{ width: `${100 - ((v.log_loss - best) / (worst - best || 1)) * 75}%` }} />
               </div>
             </li>
           ))}
         </ul>
-      </Card>
+      </Card>}
     </>
   );
 }
 
 function Calibration({ m }: { m: any }) {
-  useColorScheme();
   const c = chart();
   const calib = (["home", "draw", "away"] as const).map((k) => ({ k, points: (m.calibration?.[k] ?? []).map((x: any) => ({ predicted: x.predicted, observed: x.observed, count: x.count })) }));
   return (

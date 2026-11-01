@@ -47,7 +47,8 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader title="Matches" description="Our chances for every upcoming match. Tap one for the full picture." />
+      <PageHeader eyebrow={new Intl.DateTimeFormat(undefined, { weekday: "long", day: "numeric", month: "long" }).format(new Date())}
+                  title="Matches" description="Our chances for every upcoming match. Tap one for the full picture." />
 
       <div className="space-y-3 mb-6">
         {days.length > 0 && (
@@ -77,11 +78,15 @@ export default function Dashboard() {
           <div className="space-y-6">
             {groups.map((list) => (
               <section key={list[0].competition.code}>
-                <h2 className="mb-2 flex items-baseline gap-2 px-1 min-w-0">
-                  <span className="text-sm font-semibold truncate">{list[0].competition.name}</span>
-                  <span className="text-xs text-ink-4 truncate">{list[0].competition.country}</span>
-                </h2>
-                <div className="card overflow-hidden divide-soft">{list.map((f) => <MatchRow key={f.id} f={f} />)}</div>
+                <div className="card overflow-hidden">
+                  <h2 className="flex items-center gap-2.5 px-4 py-3 border-b border-line bg-subtle/40 min-w-0">
+                    <span aria-hidden className="h-4 w-1 shrink-0 rounded-full bg-gradient-to-b from-brand to-brand-2" />
+                    <span className="text-sm font-bold truncate">{list[0].competition.name}</span>
+                    <span className="text-xs font-medium text-ink-4 truncate">{list[0].competition.country}</span>
+                    <span className="ml-auto shrink-0 text-xs font-semibold text-ink-4 num">{list.length}</span>
+                  </h2>
+                  <div className="divide-soft">{list.map((f) => <MatchRow key={f.id} f={f} />)}</div>
+                </div>
               </section>
             ))}
           </div>

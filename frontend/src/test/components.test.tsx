@@ -29,7 +29,7 @@ describe("MatchRow", () => {
   });
 
   it("marks matches with a value bet", () => {
-    const value = { ...fixture, latest_prediction: { ...fixture.latest_prediction!, classification: "consider" } };
+    const value = { ...fixture, latest_prediction: { ...fixture.latest_prediction!, classification: "consider" as const } };
     render(<MemoryRouter><MatchRow f={value} /></MemoryRouter>);
     expect(screen.getByText("Value bet")).toBeInTheDocument();
   });

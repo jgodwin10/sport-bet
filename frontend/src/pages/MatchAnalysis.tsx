@@ -8,7 +8,7 @@ import { Icon } from "../components/icons";
 import Lineups from "../components/Lineups";
 import {
   Card, chart, ChartTooltip, cx, Disclosure, Empty, ErrorState, Figures, FormPills, Freshness, InfoTip,
-  KeyValue, Legend, Loading, OutcomeBar, Pill, ReliabilityBadge, ResultLine, SectionTitle, Segmented, TeamLogo, useColorScheme,
+  KeyValue, Legend, Loading, OutcomeBar, Pill, ReliabilityBadge, ResultLine, SectionTitle, Segmented, TeamLogo,
 } from "../components/ui";
 import { fmtDate, fmtDateTime, fmtTime, num, odds, pct, signedPct } from "../lib/format";
 import { aiProviderName, bookmakerName, CONFIDENCE, friendlyReason, GLOSSARY, outcomeLabel, plainFacts, selectionLabel, verdict } from "../lib/language";
@@ -71,21 +71,31 @@ function Hero({ a }: { a: Analysis }) {
   const lead = r ? (["home", "draw", "away"] as const).reduce((x, y) => (r[y] > r[x] ? y : x)) : null;
   const conf = p ? CONFIDENCE[p.reliability.label] : null;
   return (
-    <section className="text-center">
-      <div className="text-xs text-ink-3">{f.competition.name} · {fmtDateTime(f.kickoff_utc)}</div>
+    <section className="card relative overflow-hidden px-4 pt-5 pb-5 sm:px-8 sm:pt-7 text-center">
+      <div aria-hidden className="pointer-events-none absolute inset-0"
+           style={{ background: "radial-gradient(420px 220px at 0% 0%, rgb(var(--home) / 0.14), transparent 70%), radial-gradient(420px 220px at 100% 0%, rgb(var(--away) / 0.12), transparent 70%)" }} />
+      <div className="relative">
+      <div className="inline-flex items-center gap-2 rounded-full border border-line bg-bg/50 px-3 py-1 text-xs font-semibold text-ink-3">
+        <span className="text-ink-2">{f.competition.name}</span><span className="text-ink-4">·</span>{fmtDateTime(f.kickoff_utc)}
+      </div>
 
       <div className="mt-5 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-start gap-3 sm:gap-8">
         {[f.home_team, null, f.away_team].map((t) => t ? (
           <div key={t.id} className="flex flex-col items-center min-w-0">
-            <TeamLogo name={t.name} src={t.logo_url} size={56} className="sm:!w-[72px] sm:!h-[72px]" />
-            <h1 className="mt-2.5 text-[15px] sm:text-xl font-semibold leading-snug">{t.name}</h1>
+            <span className="grid place-items-center rounded-full bg-bg/50 p-2 ring-1 ring-line">
+              <TeamLogo name={t.name} src={t.logo_url} size={52} className="sm:!w-[68px] sm:!h-[68px]" />
+            </span>
+            <h1 className="mt-3 text-[15px] sm:text-xl font-extrabold leading-snug">{t.name}</h1>
           </div>
         ) : (
           <div key="mid" className="pt-3 sm:pt-5">
             {f.score ? (
-              <div className="text-3xl sm:text-4xl font-semibold num">{f.score.home}<span className="text-ink-4 mx-1.5">–</span>{f.score.away}</div>
+              <div className="text-3xl sm:text-5xl font-extrabold num">{f.score.home}<span className="text-ink-4 mx-1.5">–</span>{f.score.away}</div>
             ) : (
-              <div className="text-xl sm:text-2xl font-semibold num">{fmtTime(f.kickoff_utc)}</div>
+              <div className="leading-tight">
+                <div className="text-2xl sm:text-4xl font-extrabold num">{fmtTime(f.kickoff_utc).split(" ")[0]}</div>
+                <div className="mt-1 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-4">{fmtTime(f.kickoff_utc).split(" ")[1] ?? "Kickoff"}</div>
+              </div>
             )}
           </div>
         ))}
@@ -94,22 +104,24 @@ function Hero({ a }: { a: Analysis }) {
       {p && r && lead && (
         <div className="mx-auto mt-6 max-w-md">
           <p className="text-sm text-ink-3">
-            Most likely <span className="font-semibold text-ink">{outcomeLabel(lead, f.home_team.name, f.away_team.name)}</span> · <span className="num font-semibold text-ink">{pct(r[lead], 0)}</span>
+            Most likely <span className="font-bold text-ink">{outcomeLabel(lead, f.home_team.name, f.away_team.name)}</span>{" "}
+            <span className="ml-1 rounded-lg bg-brand/15 px-2 py-0.5 num font-extrabold text-brand">{pct(r[lead], 0)}</span>
           </p>
           <div className="mt-3 text-left"><OutcomeBar size="lg" p={r} labels={["Home", "Draw", "Away"]} /></div>
         </div>
       )}
 
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-xs text-ink-3">
-        {p && <span className={cx(p.classification === "consider" && "font-medium text-pos", p.classification === "high_uncertainty" && "text-warn")}>{verdict(p.classification).label}</span>}
-        {p && conf && <span title={GLOSSARY.confidence}>· Data confidence {conf.label.toLowerCase()}</span>}
-        <span>· {p?.lineup_status === "confirmed" ? "Lineups confirmed" : "Lineups not out yet"}</span>
-        <span>· <Freshness hours={a.odds.age_hours} /></span>
+      <div className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-xs text-ink-3">
+        {p && <span className={cx("font-medium", p.classification === "consider" ? "text-pos" : p.classification === "high_uncertainty" ? "text-warn" : "text-ink-2")}>{verdict(p.classification).label}</span>}
+        {p && conf && <span title={GLOSSARY.confidence}>Confidence {conf.label.toLowerCase()}</span>}
+        <span>{p?.lineup_status === "confirmed" ? "Lineups confirmed" : "Lineups not out"}</span>
+        <Freshness hours={a.odds.age_hours} />
         {me.data?.role === "admin" && (
           <button className="btn btn-sm" disabled={action.isPending} onClick={() => action.mutate({ path: `/admin/refresh-fixture/${f.id}` })}>
             <Icon name="refresh" size={13} />{action.isPending ? "Queuing…" : action.isSuccess ? "Queued" : "Refresh"}
           </button>
         )}
+      </div>
       </div>
     </section>
   );
@@ -133,9 +145,10 @@ function Overview({ a, p }: { a: Analysis; p: PredictionDetail }) {
 
   return (
     <>
-      <section className="card p-4 sm:p-5">
-        <div className="label">Our verdict</div>
-        <h2 className={cx("mt-1 text-lg font-semibold", qual.length ? "text-pos" : v.tone === "warn" && "text-warn")}>{v.label}</h2>
+      <section className={cx("card relative overflow-hidden p-4 sm:p-6", qual.length && "!border-brand/35")}>
+        {qual.length > 0 && <span aria-hidden className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-brand to-brand-2" />}
+        <div className="eyebrow">Our verdict</div>
+        <h2 className={cx("mt-1.5 text-xl font-extrabold", qual.length ? "text-pos" : v.tone === "warn" && "text-warn")}>{v.label}</h2>
         <p className="mt-1 text-sm text-ink-3">{v.explain}</p>
         {qual.length > 0 ? (
           <div className="mt-4 space-y-3">
@@ -192,7 +205,7 @@ function PickRow({ s, home, away }: { s: PredictionSelection; home: string; away
     <div className="rounded-xl border border-pos/30 bg-pos/5 p-4">
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 font-semibold">{selectionLabel(s.market, s.selection, home, away)}</span>
-        <span className="shrink-0 text-xl font-semibold num">{odds(s.odds)}</span>
+        <span className="shrink-0 text-xl font-extrabold num">{odds(s.odds)}</span>
       </div>
       <Figures className="mt-3" items={[["Our chance", pct(s.probability, 0)], ["Bookmaker", pct(s.implied_probability, 0)], ["Value", signedPct(s.expected_value), "pos"]]} />
       <p className="mt-3 text-xs text-ink-3">Best price at {bookmakerName(s.bookmaker)}. Value is an estimate, not a promise.</p>
@@ -320,7 +333,6 @@ const FORM_ROWS: [string, keyof FormSummary, "last_5" | "last_10" | "last_15", n
 ];
 
 function Stats({ a }: { a: Analysis }) {
-  useColorScheme();
   const c = chart();
   const f = a.fixture;
   const hs = a.form.home.summary, as = a.form.away.summary;
@@ -336,12 +348,12 @@ function Stats({ a }: { a: Analysis }) {
     <>
       <Card title="Form" flush>
         <table className="table table-fixed">
-          <colgroup><col /><col className="w-[76px] sm:w-[120px]" /><col className="w-[76px] sm:w-[120px]" /></colgroup>
+          <colgroup><col /><col className="w-[84px] sm:w-[120px]" /><col className="w-[84px] sm:w-[120px]" /></colgroup>
           <thead>
             <tr>
               <th className="pl-4 sm:pl-5">Last 5</th>
               {[[f.home_team, hs.sequence], [f.away_team, as.sequence]].map(([t, seq]: any, i) => (
-                <th key={t.id} className={cx("text-center", i === 1 && "pr-4 sm:pr-5")}>
+                <th key={t.id} className={cx("!px-1 text-center", i === 1 && "!pr-3 sm:!pr-5")}>
                   <div className="flex flex-col items-center gap-1.5">
                     <TeamLogo name={t.name} src={t.logo_url} size={22} />
                     <FormPills seq={seq} size={12} />
@@ -585,7 +597,7 @@ function ModelBreakdown({ a, p }: { a: Analysis; p: PredictionDetail }) {
               <td className="!pl-0 font-semibold">Blended</td>
               {(["home", "draw", "away"] as const).map((k) => (
                 <td key={k} className="num text-right font-semibold">{pct(r[k], 0)}
-                  {Array.isArray(iv[k]) && <div className="text-[10px] font-normal text-ink-4">{pct(iv[k][0], 0)}–{pct(iv[k][1], 0)}</div>}
+                  {Array.isArray(iv[k]) && <div className="text-[10px] font-normal text-ink-4 whitespace-nowrap">{pct(iv[k][0], 0)}–{pct(iv[k][1], 0)}</div>}
                 </td>
               ))}
               <td />
@@ -720,7 +732,7 @@ function DataSources({ a }: { a: Analysis }) {
         ["Matches the models learned from", String(dq.training_matches ?? "—")],
         ["Team sample sizes (home / away)", dq.sample_sizes ? `${dq.sample_sizes.home} / ${dq.sample_sizes.away}` : "—"],
         ["Bookmakers priced", String(dq.odds_bookmakers?.length ?? 0)],
-        ["Model version", <span key="v" className="font-mono text-xs break-all">{String(dq.model_version ?? "unvalidated")}</span>],
+        ["Model version", <span key="v" className="font-mono text-xs whitespace-normal break-all">{String(dq.model_version ?? "unvalidated")}</span>],
       ]} />
       <ul className="mt-4 divide-soft">
         {a.sources.map((s) => (

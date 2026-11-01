@@ -84,7 +84,7 @@ export default function Predictions() {
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {q.data.items.map((r) => <div key={r.selection_id} className="min-w-0"><BetCard r={r} status={<RowStatus r={r} />} /></div>)}
+              {q.data.items.map((r) => <div key={r.selection_id} className="min-w-0"><BetCard r={r} highlight={r.qualifies && r.status !== "settled"} status={<RowStatus r={r} />} /></div>)}
             </div>
             <Pager page={q.data.page} pageSize={q.data.page_size} total={q.data.total} onPage={setPage} />
           </>

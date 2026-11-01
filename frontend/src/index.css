@@ -3,104 +3,104 @@
 @tailwind utilities;
 
 @layer base {
-  /* Neutral greys, one semantic colour each for good / bad / caution, and the 1-X-2 data colours. */
+  /* Deep navy surfaces, one emerald-to-cyan brand accent, a colour each for good / bad / caution,
+     and the 1-X-2 data colours. */
   :root {
-    color-scheme: light;
-    --bg: 250 250 250;
-    --surface: 255 255 255;
-    --subtle: 244 244 245;
-    --line: 231 231 233;
-    --line-strong: 212 212 216;
-    --ink: 24 24 27;
-    --ink-2: 63 63 70;
-    --ink-3: 113 113 122;
-    --ink-4: 161 161 170;
-    --pos: 22 163 74;
-    --neg: 220 38 38;
-    --warn: 217 119 6;
-    --home: 37 99 235;
-    --draw: 161 161 170;
-    --away: 234 88 12;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      color-scheme: dark;
-      --bg: 9 9 11;
-      --surface: 24 24 27;
-      --subtle: 39 39 42;
-      --line: 39 39 42;
-      --line-strong: 63 63 70;
-      --ink: 250 250 250;
-      --ink-2: 212 212 216;
-      --ink-3: 161 161 170;
-      --ink-4: 113 113 122;
-      --pos: 74 222 128;
-      --neg: 248 113 113;
-      --warn: 251 191 36;
-      --home: 96 165 250;
-      --draw: 113 113 122;
-      --away: 251 146 60;
-    }
+    color-scheme: dark;
+    --bg: 6 9 18;
+    --surface: 13 18 32;
+    --subtle: 22 29 47;
+    --line: 29 38 58;
+    --line-strong: 44 56 82;
+    --ink: 241 245 249;
+    --ink-2: 203 213 225;
+    --ink-3: 148 163 184;
+    --ink-4: 100 116 139;
+    --brand: 52 211 153;
+    --brand-2: 34 211 238;
+    --brand-ink: 3 20 16;
+    --pos: 52 211 153;
+    --neg: 248 113 113;
+    --warn: 251 191 36;
+    --home: 96 165 250;
+    --draw: 148 163 184;
+    --away: 251 146 60;
   }
 
   html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
   body {
     @apply bg-bg text-ink antialiased font-sans text-[15px] leading-relaxed;
-    font-feature-settings: "cv11" 1, "ss01" 1;
+    font-feature-settings: "tnum" 1;
     min-height: 100dvh;
   }
-  /* Long team names, URLs and numbers must wrap instead of widening the page. */
-  h1, h2, h3, p, li, dd, dt { overflow-wrap: anywhere; }
-  ::selection { @apply bg-ink/15; }
-  :focus-visible { @apply outline-none ring-2 ring-ink/40 ring-offset-2 ring-offset-bg rounded-lg; }
+  /* Soft brand light behind everything; fixed so it never adds to page size. */
+  body::before {
+    content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgb(var(--brand) / 0.10), transparent 62%),
+      radial-gradient(760px 480px at 100% -4%, rgb(var(--brand-2) / 0.07), transparent 60%);
+  }
+  /* Words too long for their line (team names, URLs) wrap instead of widening the page. */
+  h1, h2, h3, p, li, dd, dt { overflow-wrap: break-word; }
+  h1, h2, h3 { hyphens: auto; letter-spacing: -0.02em; }
+  ::selection { @apply bg-brand/30; }
+  :focus-visible { @apply outline-none ring-2 ring-brand/70 ring-offset-2 ring-offset-bg rounded-lg; }
   img, svg, video { max-width: 100%; }
   img { -webkit-user-drag: none; }
 }
 
 @layer components {
-  .card { @apply bg-surface border border-line rounded-2xl min-w-0; }
+  .card { @apply bg-surface border border-line rounded-2xl shadow-card min-w-0; }
+  .card-link { @apply transition-colors duration-150 hover:border-line-strong hover:bg-[#101729]; }
   .num { font-variant-numeric: tabular-nums; }
   .divide-soft > * + * { @apply border-t border-line; }
   .label { @apply text-xs font-medium text-ink-3; }
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-[0.14em] text-ink-4; }
+  .text-gradient { @apply bg-gradient-to-r from-brand to-brand-2 bg-clip-text text-transparent; }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full text-sm font-medium whitespace-nowrap
-           bg-surface text-ink border border-line-strong hover:bg-subtle transition-colors
+    @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold whitespace-nowrap
+           bg-subtle text-ink border border-line-strong hover:border-ink-4 transition-colors
            disabled:opacity-50 disabled:pointer-events-none;
   }
-  .btn-primary { @apply bg-ink text-bg border-transparent hover:bg-ink/85; }
-  .btn-ghost { @apply bg-transparent border-transparent text-ink-3 hover:bg-subtle hover:text-ink; }
-  .btn-sm { @apply h-8 px-3 text-[13px]; }
+  .btn-primary {
+    @apply bg-gradient-to-r from-brand to-brand-2 text-brand-ink border-transparent shadow-glow hover:brightness-110 hover:border-transparent;
+  }
+  .btn-ghost { @apply bg-transparent border-transparent text-ink-3 hover:bg-subtle hover:text-ink hover:border-transparent; }
+  .btn-sm { @apply h-8 px-3 text-[13px] rounded-lg; }
   .btn-icon { @apply w-10 px-0; }
   .btn-icon.btn-sm { @apply w-8; }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium whitespace-nowrap shrink-0
-           text-ink-3 hover:text-ink hover:bg-subtle transition-colors;
+    @apply inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-semibold whitespace-nowrap shrink-0
+           text-ink-3 border border-line bg-surface hover:text-ink hover:border-line-strong transition-colors;
   }
-  .chip[aria-selected="true"], .chip[aria-pressed="true"] { @apply bg-ink text-bg hover:bg-ink hover:text-bg; }
+  .chip[aria-selected="true"], .chip[aria-pressed="true"] {
+    @apply bg-brand/15 text-brand border-brand/40 hover:text-brand hover:border-brand/40;
+  }
 
-  .pill { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
+  .pill { @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap; }
 
   .field { @apply flex flex-col gap-1.5 min-w-0; }
   .input {
-    @apply h-10 w-full min-w-0 rounded-xl bg-surface border border-line-strong px-3.5 text-sm text-ink placeholder:text-ink-4
-           transition-colors focus:border-ink/50 focus:outline-none disabled:opacity-60;
+    @apply h-10 w-full min-w-0 rounded-xl bg-bg/60 border border-line-strong px-3.5 text-sm text-ink placeholder:text-ink-4
+           transition-colors hover:border-ink-4 focus:border-brand/60 focus:outline-none disabled:opacity-60;
   }
   select.input {
     @apply appearance-none pr-9 bg-no-repeat cursor-pointer truncate;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
     background-size: 16px; background-position: right 12px center;
   }
+  select.input option { @apply bg-surface text-ink; }
 
   .table { @apply w-full text-sm; }
-  :where(.table) th { @apply text-left text-xs font-medium text-ink-3 px-3 py-2.5 border-b border-line whitespace-nowrap; }
+  :where(.table) th { @apply text-left text-[11px] font-bold uppercase tracking-[0.08em] text-ink-4 px-3 py-2.5 border-b border-line whitespace-nowrap; }
   :where(.table) td { @apply px-3 py-2.5 border-b border-line align-middle; }
   :where(.table) tbody tr:last-child td { @apply border-b-0; }
 
   .skeleton {
     @apply rounded-md bg-subtle animate-shimmer;
-    background-image: linear-gradient(90deg, transparent 0, rgb(var(--surface) / 0.6) 50%, transparent 100%);
+    background-image: linear-gradient(90deg, transparent 0, rgb(255 255 255 / 0.05) 50%, transparent 100%);
     background-size: 400px 100%;
   }
   /* Horizontal scrollers stay inside their box; the page itself never scrolls sideways. */

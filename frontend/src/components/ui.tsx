@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { ApiError } from "../api/client";
 import { age, fmtDate, pct } from "../lib/format";
 import { CONFIDENCE, verdict, type Tone } from "../lib/language";
@@ -10,8 +10,8 @@ export function cx(...parts: (string | number | false | null | undefined)[]) {
 
 /* ------------------------------------------------------------------ colour */
 const FALLBACK: Record<string, string> = {
-  home: "37 99 235", draw: "161 161 170", away: "234 88 12", pos: "22 163 74", neg: "220 38 38",
-  "ink-3": "113 113 122", "ink-4": "161 161 170", line: "231 231 233",
+  home: "96 165 250", draw: "148 163 184", away: "251 146 60", pos: "52 211 153", neg: "248 113 113", brand: "52 211 153",
+  "ink-3": "148 163 184", "ink-4": "100 116 139", line: "29 38 58",
 };
 /** Theme colour as an rgb() string. Charts draw SVG attributes, which cannot resolve CSS variables. */
 export function color(name: string, alpha = 1): string {
@@ -21,17 +21,20 @@ export function color(name: string, alpha = 1): string {
 }
 export const chart = () => ({
   axis: color("ink-4"), grid: color("line"), fontSize: 11,
-  series: [color("home"), color("away"), color("pos")],
+  series: [color("home"), color("away"), color("brand")],
   outcome: { home: color("home"), draw: color("draw"), away: color("away") },
 });
 
 /* ------------------------------------------------------------------ layout */
-export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({ title, description, actions, eyebrow }: {
+  title: ReactNode; description?: ReactNode; actions?: ReactNode; eyebrow?: ReactNode;
+}) {
   return (
-    <header className="mb-6 sm:mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <header className="mb-6 sm:mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between animate-rise">
       <div className="min-w-0">
-        <h1 className="text-2xl sm:text-[28px] font-semibold tracking-tight leading-tight">{title}</h1>
-        {description && <p className="mt-1.5 text-[15px] text-ink-3 max-w-xl">{description}</p>}
+        {eyebrow && <div className="eyebrow mb-2 !text-brand">{eyebrow}</div>}
+        <h1 className="text-[28px] sm:text-[36px] font-extrabold leading-[1.1]">{title}</h1>
+        {description && <p className="mt-2 text-[15px] text-ink-3 max-w-xl">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 min-w-0">{actions}</div>}
     </header>
@@ -47,7 +50,7 @@ export function Card({ title, subtitle, action, children, className, flush, info
       {(title || action) && (
         <header className="flex items-start justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
           <div className="min-w-0">
-            {title && <h2 className="text-[15px] font-semibold flex items-center gap-1.5">{title}{info && <InfoTip text={info} />}</h2>}
+            {title && <h2 className="text-[15px] font-bold flex items-center gap-1.5">{title}{info && <InfoTip text={info} />}</h2>}
             {subtitle && <p className="mt-0.5 text-[13px] text-ink-3">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0 flex items-center gap-2">{action}</div>}
@@ -62,7 +65,7 @@ export function Card({ title, subtitle, action, children, className, flush, info
 export function SectionTitle({ children, action }: { children: ReactNode; action?: ReactNode }) {
   return (
     <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 className="text-[15px] font-semibold">{children}</h2>
+      <h2 className="text-base font-bold">{children}</h2>
       {action}
     </div>
   );
@@ -74,7 +77,7 @@ export function StatTile({ label, value, hint, tone, info }: { label: string; va
   return (
     <div className="card px-4 py-3.5 sm:px-5 sm:py-4">
       <div className="label flex items-center gap-1 min-w-0"><span className="truncate">{label}</span>{info && <InfoTip text={info} />}</div>
-      <div className={cx("mt-1 text-xl sm:text-2xl font-semibold num tracking-tight break-words", TONE_TEXT[tone ?? "neutral"])}>{value}</div>
+      <div className={cx("mt-1.5 text-[22px] sm:text-[26px] font-extrabold num tracking-[-0.02em] leading-tight break-words", TONE_TEXT[tone ?? "neutral"])}>{value}</div>
       {hint && <div className="mt-0.5 text-xs text-ink-3">{hint}</div>}
     </div>
   );
@@ -87,7 +90,7 @@ export function Figures({ items, className }: { items: [string, ReactNode, Tone?
       {items.map(([label, value, tone, info]) => (
         <div key={label} className="min-w-0">
           <dt className="label flex items-center gap-0.5"><span className="truncate">{label}</span>{info && <InfoTip text={info} />}</dt>
-          <dd className={cx("mt-0.5 text-[15px] font-semibold num", TONE_TEXT[tone ?? "neutral"])}>{value}</dd>
+          <dd className={cx("mt-0.5 text-[15px] font-bold num", TONE_TEXT[tone ?? "neutral"])}>{value}</dd>
         </div>
       ))}
     </dl>
@@ -126,8 +129,8 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
 export function Empty({ title, children, icon = "info", action }: { title: string; children?: ReactNode; icon?: IconName; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center text-center py-10 px-4">
-      <Icon name={icon} size={22} className="text-ink-4 mb-3" />
-      <p className="text-[15px] font-medium">{title}</p>
+      <span className="mb-4 grid h-12 w-12 place-items-center rounded-2xl bg-brand/10 text-brand ring-1 ring-inset ring-brand/20"><Icon name={icon} size={22} /></span>
+      <p className="text-base font-bold">{title}</p>
       {children && <div className="mt-1.5 text-sm text-ink-3 max-w-sm">{children}</div>}
       {action && <div className="mt-5">{action}</div>}
     </div>
@@ -140,7 +143,7 @@ const TONES: Record<Tone, string> = {
   pos: "bg-pos/10 text-pos",
   neg: "bg-neg/10 text-neg",
   warn: "bg-warn/10 text-warn",
-  brand: "bg-ink text-bg",
+  brand: "bg-brand/15 text-brand",
 };
 
 export function Pill({ tone = "neutral", icon, children, className, title }: { tone?: Tone; icon?: IconName; children: ReactNode; className?: string; title?: string }) {
@@ -237,9 +240,10 @@ export function ProbChips({ p }: { p: { home?: number; draw?: number; away?: num
   return (
     <div className="grid grid-cols-3 gap-1" role="img" aria-label={items.map(([k, v]) => `${k} ${pct(v, 0)}`).join(", ")}>
       {items.map(([k, v]) => (
-        <span key={k} className={cx("flex flex-col items-center rounded-lg py-1", v === max ? "bg-subtle text-ink" : "text-ink-3")}>
-          <span className="text-[10px] leading-none text-ink-4">{k}</span>
-          <span className={cx("mt-1 text-[13px] num leading-none", v === max && "font-semibold")}>{pct(v, 0)}</span>
+        <span key={k} className={cx("flex flex-col items-center rounded-lg py-1.5 ring-1 ring-inset",
+                                    v === max ? "bg-brand/10 text-brand ring-brand/30" : "bg-bg/40 text-ink-3 ring-line")}>
+          <span className={cx("text-[10px] font-bold leading-none", v === max ? "text-brand/70" : "text-ink-4")}>{k}</span>
+          <span className={cx("mt-1 text-[13px] num leading-none", v === max ? "font-extrabold" : "font-semibold")}>{pct(v, 0)}</span>
         </span>
       ))}
     </div>
@@ -248,7 +252,7 @@ export function ProbChips({ p }: { p: { home?: number; draw?: number; away?: num
 
 export function FormPills({ seq, max = 5, size = 20 }: { seq: string; max?: number; size?: number }) {
   return (
-    <span className="inline-flex gap-1" aria-label={`Last results: ${seq.slice(0, max)}`}>
+    <span className={cx("inline-flex", size < 16 ? "gap-0.5" : "gap-1")} aria-label={`Last results: ${seq.slice(0, max)}`}>
       {seq.split("").slice(0, max).map((r, i) => (
         <span key={i} style={{ width: size, height: size, fontSize: Math.max(9, size * 0.5) }}
               className={cx("grid place-items-center rounded-md font-semibold",
@@ -306,10 +310,10 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
       <div role="tablist" aria-label={label} className={cx("flex gap-5 sm:gap-6 border-b border-line scroll-x", className)}>
         {options.map((o) => (
           <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                  className={cx("relative h-11 shrink-0 text-sm font-medium whitespace-nowrap transition-colors",
+                  className={cx("relative h-12 shrink-0 text-sm font-semibold whitespace-nowrap transition-colors",
                                 value === o.value ? "text-ink" : "text-ink-3 hover:text-ink")}>
             {o.label}
-            {value === o.value && <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-ink" />}
+            {value === o.value && <span aria-hidden className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-brand to-brand-2" />}
           </button>
         ))}
       </div>
@@ -327,11 +331,11 @@ export function Segmented<T extends string>({ value, options, onChange, label, c
     );
   }
   return (
-    <div role="tablist" aria-label={label} className={cx("inline-flex max-w-full rounded-full bg-subtle p-1 gap-1 scroll-x", className)}>
+    <div role="tablist" aria-label={label} className={cx("inline-flex max-w-full rounded-xl border border-line bg-surface p-1 gap-1 scroll-x", className)}>
       {options.map((o) => (
         <button key={o.value} role="tab" aria-selected={value === o.value} onClick={() => onChange(o.value)}
-                className={cx("h-8 shrink-0 rounded-full px-3.5 text-[13px] font-medium transition-colors whitespace-nowrap",
-                              value === o.value ? "bg-surface text-ink shadow-sm" : "text-ink-3 hover:text-ink")}>
+                className={cx("h-8 shrink-0 rounded-lg px-3.5 text-[13px] font-semibold transition-colors whitespace-nowrap",
+                              value === o.value ? "bg-subtle text-ink shadow-card ring-1 ring-inset ring-line-strong" : "text-ink-3 hover:text-ink")}>
           {o.label}
         </button>
       ))}
@@ -452,7 +456,7 @@ export function KeyValue({ items, className }: { items: [ReactNode, ReactNode][]
       {items.map(([k, v], i) => (
         <div key={i} className="flex items-baseline justify-between gap-4 py-2.5 text-sm">
           <dt className="text-ink-3 min-w-0">{k}</dt>
-          <dd className="num font-medium text-right min-w-0">{v}</dd>
+          <dd className="num font-medium text-right shrink-0 whitespace-nowrap">{v}</dd>
         </div>
       ))}
     </dl>
@@ -464,7 +468,7 @@ export function Disclosure({ title, children, defaultOpen = false }: { title: Re
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="min-w-0">
-      <button className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3.5 text-left text-sm font-medium hover:bg-subtle/50 transition-colors"
+      <button className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-4 text-left text-sm font-semibold hover:bg-subtle/40 transition-colors"
               aria-expanded={open} onClick={() => setOpen(!open)}>
         <span className="min-w-0">{title}</span>
         <Icon name="chevronDown" size={16} className={cx("text-ink-4 shrink-0 transition-transform", open && "rotate-180")} />
@@ -472,18 +476,4 @@ export function Disclosure({ title, children, defaultOpen = false }: { title: Re
       {open && <div className="px-4 sm:px-5 pb-5 animate-fade-in">{children}</div>}
     </div>
   );
-}
-
-/** Re-render when the colour scheme flips, so chart colours read from CSS follow it. */
-export function useColorScheme(): "light" | "dark" {
-  const media = () => (typeof window !== "undefined" && window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null);
-  const [dark, setDark] = useState(() => !!media()?.matches);
-  useLayoutEffect(() => {
-    const query = media();
-    if (!query) return;
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    query.addEventListener?.("change", on);
-    return () => query.removeEventListener?.("change", on);
-  }, []);
-  return dark ? "dark" : "light";
 }

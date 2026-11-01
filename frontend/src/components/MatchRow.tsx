@@ -13,29 +13,31 @@ export function MatchRow({ f }: { f: Fixture }) {
   const [clock, meridiem] = fmtTime(f.kickoff_utc).split(" ");
   const v = p ? verdict(p.classification) : null;
   return (
-    <Link to={`/match/${f.id}`} className="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-subtle/60">
-      <div className="w-11 shrink-0 text-center leading-tight">
-        <div className="text-sm font-medium num">{clock}</div>
-        {meridiem && <div className="text-[10px] text-ink-4">{meridiem}</div>}
-        {status && <div className="mt-0.5 text-[10px] font-semibold uppercase text-warn">{status}</div>}
+    <Link to={`/match/${f.id}`} className="group flex items-center gap-3 px-3 sm:px-4 py-3 transition-colors hover:bg-subtle/40">
+      <div className="w-11 sm:w-12 shrink-0 rounded-xl bg-bg/50 py-1.5 text-center leading-tight ring-1 ring-inset ring-line">
+        <div className="text-[13px] font-bold num">{clock}</div>
+        {status ? <div className="text-[10px] font-bold uppercase text-warn">{status}</div>
+          : meridiem && <div className="text-[10px] font-semibold text-ink-4">{meridiem}</div>}
       </div>
 
       <div className="min-w-0 flex-1 space-y-1">
         {[f.home_team, f.away_team].map((t, i) => (
           <div key={t.id} className="flex items-center gap-2 min-w-0">
             <TeamLogo name={t.name} src={t.logo_url} size={18} />
-            <span className={cx("truncate text-sm", lead === (i === 0 ? "home" : "away") ? "font-semibold text-ink" : "text-ink-2")}>{t.name}</span>
-            {f.score && <span className="ml-auto text-sm font-semibold num">{i === 0 ? f.score.home : f.score.away}</span>}
+            <span className={cx("truncate text-sm", lead === (i === 0 ? "home" : "away") ? "font-bold text-ink" : "font-medium text-ink-3")}>{t.name}</span>
+            {f.score && <span className="ml-auto text-sm font-bold num">{i === 0 ? f.score.home : f.score.away}</span>}
           </div>
         ))}
         {p?.classification === "consider" && (
-          <div className="flex items-center gap-1.5 pt-0.5 text-xs font-medium text-pos" title={v!.explain}>
-            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-pos" />Value bet
+          <div className="pt-0.5" title={v!.explain}>
+            <span className="inline-flex items-center gap-1 rounded-full bg-pos/10 px-2 py-0.5 text-[11px] font-bold text-pos ring-1 ring-inset ring-pos/25">
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-pos" />Value bet
+            </span>
           </div>
         )}
       </div>
 
-      <div className="shrink-0 w-[118px] sm:w-[144px]">
+      <div className="shrink-0 w-[108px] sm:w-[150px]">
         {p ? <ProbChips p={p.one_x_two} /> : <div className="text-center text-xs text-ink-4">No prediction yet</div>}
       </div>
     </Link>

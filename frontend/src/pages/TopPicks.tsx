@@ -27,7 +27,7 @@ export default function TopPicks() {
   const [view, setView] = useState("upcoming");
   return (
     <>
-      <PageHeader title="Top picks"
+      <PageHeader eyebrow="Ranked by the model" title="Top picks"
                   description={view === "upcoming"
                     ? <>The strongest bet in each match, best first. <InfoTip text={RANKING} /></>
                     : <>How the Top 10 has done, at 1 unit per pick. <InfoTip text={TRACKING} /></>}
@@ -68,7 +68,7 @@ function Upcoming() {
             <ol className="grid gap-3 lg:grid-cols-2">
               {items.map((t) => (
                 <li key={t.selection_id} className="min-w-0">
-                  <BetCard r={t} rank={t.rank}
+                  <BetCard r={t} rank={t.rank} highlight={t.tier === "recommended"}
                            status={<BetStatus ok={t.tier === "recommended"} warnLabel="Watchlist" reason={t.rejection_reasons[0] && friendlyReason(t.rejection_reasons[0])} />}>
                     <AiRead t={t} />
                   </BetCard>
