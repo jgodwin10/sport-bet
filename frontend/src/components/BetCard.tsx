@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useCompetitions } from "../api/hooks";
 import type { SelectionRow } from "../api/types";
 import { fmtDateTime, odds, pct, signedPct } from "../lib/format";
 import { GLOSSARY, selectionLabel } from "../lib/language";
@@ -13,6 +14,8 @@ export function BetCard({ r, rank, status, children, highlight }: {
   const home = r.home_team, away = r.away_team;
   const ours = Math.min(1, Math.max(0, r.probability));
   const book = Math.min(1, Math.max(0, r.implied_probability));
+  const comps = useCompetitions();
+  const league = comps.data?.find((c) => c.code === r.competition)?.name ?? r.competition;
   return (
     <article className={cx("tile card-link relative flex h-full flex-col p-4 sm:p-5", highlight && "!border-brand/40")}>
       <div className="flex items-start gap-3">
@@ -23,7 +26,7 @@ export function BetCard({ r, rank, status, children, highlight }: {
           </span>
         )}
         <div className="min-w-0 flex-1 text-center">
-          <div className="truncate text-sm font-bold">{r.competition}</div>
+          <div className="truncate text-sm font-bold">{league}</div>
           <div className="truncate text-xs text-ink-3">{fmtDateTime(r.kickoff_utc)}</div>
         </div>
         <span className={cx("shrink-0 rounded-full px-2.5 py-1 text-xs font-bold num ring-1 ring-inset",
@@ -43,7 +46,7 @@ export function BetCard({ r, rank, status, children, highlight }: {
         {[home, null, away].map((t, i) => t !== null ? (
           <div key={i} className="flex min-w-0 flex-col items-center gap-2 text-center">
             <TeamLogo name={t?.name ?? ""} src={t?.logo_url} size={52} />
-            <span className="w-full truncate text-[13px] font-semibold">{t?.name}</span>
+            <span className="w-full line-clamp-2 text-[13px] font-semibold leading-snug [overflow-wrap:anywhere]">{t?.name}</span>
           </div>
         ) : (
           <div key="odds" className="flex flex-col items-center gap-1">

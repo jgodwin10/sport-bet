@@ -94,7 +94,7 @@ function Hero({ a }: { a: Analysis }) {
           {[f.home_team, null, f.away_team].map((t, i) => t ? (
             <Link key={t.id} to={`/teams?team=${t.id}`} className="flex flex-col items-center min-w-0 text-center">
               <TeamLogo name={t.name} src={t.logo_url} size={64} className="sm:!w-[104px] sm:!h-[104px]" />
-              <h1 className="mt-3 text-base sm:text-[26px] font-extrabold leading-tight">{t.name}</h1>
+              <h1 className="mt-3 w-full text-[15px] sm:text-[26px] font-extrabold leading-tight [overflow-wrap:anywhere]">{t.name}</h1>
               <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-ink-4">{i === 0 ? "Home" : "Away"}</span>
             </Link>
           ) : (

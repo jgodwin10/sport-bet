@@ -114,7 +114,7 @@ function Hero({ f, days, day, onDay }: { f: Fixture; days: string[]; day: string
           {[f.home_team, null, f.away_team].map((t, i) => t ? (
             <Link key={i} to={`/teams?team=${t.id}`} className="flex min-w-0 flex-col items-center text-center">
               <TeamLogo name={t.name} src={t.logo_url} size={64} className="sm:!w-[104px] sm:!h-[104px]" />
-              <span className="mt-3 text-base sm:text-[26px] font-extrabold leading-tight">{t.name}</span>
+              <span className="mt-3 w-full text-[15px] sm:text-[26px] font-extrabold leading-tight [hyphens:auto] [overflow-wrap:anywhere]">{t.name}</span>
             </Link>
           ) : (
             <div key="mid" className="flex flex-col items-center gap-2 sm:gap-3 text-center">
