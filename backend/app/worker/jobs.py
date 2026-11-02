@@ -134,7 +134,9 @@ def refresh_team_news() -> dict:
 def _record_slip(db) -> dict | str:
     s = get_settings()
     try:
-        return record_two_odds(db, datetime.now(timezone.utc), s.two_odds_timezone, AiAnalysisService(db, s).configured)
+        # With scheduled analysis off, no leg would ever get the news check it would be waiting for
+        ai_on = AiAnalysisService(db, s).configured and s.gemini_auto_hours > 0
+        return record_two_odds(db, datetime.now(timezone.utc), s.two_odds_timezone, ai_on)
     except Exception:  # noqa: BLE001 - the slip must not fail the jobs that feed it
         db.rollback()
         log.exception("recording the daily 2 odds slip failed")

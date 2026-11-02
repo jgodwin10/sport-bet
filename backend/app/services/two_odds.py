@@ -126,6 +126,11 @@ def _h2h_check(team: str, meetings: list[dict]) -> Check:
                  f"{team} won {wins}, lost {losses} of the last {len(recent)} meetings")
 
 
+def _ordinal(n: int) -> str:
+    suffix = "th" if 10 <= n % 100 <= 20 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+
 def _table_check(db: Session, f: Fixture, backed: int, opponent: int, team: str, now: datetime) -> Check:
     if f.competition.format == "cup":
         return Check("table", "League table", UNCHECKED, "a cup has no league table")
@@ -134,7 +139,8 @@ def _table_check(db: Session, f: Fixture, backed: int, opponent: int, team: str,
     if not a or not b or a["played"] < 5:
         return Check("table", "League table", UNCHECKED, "too early in the season to read the table")
     return Check("table", "League table", PASS if a["position"] < b["position"] else NOTE,
-                 f"{team} {a['position']}th on {a['points']} points, opponent {b['position']}th on {b['points']}")
+                 f"{team} {_ordinal(a['position'])} on {a['points']} points, "
+                 f"opponent {_ordinal(b['position'])} on {b['points']}")
 
 
 def _rest_check(team: str, mine: list[dict], theirs: list[dict], kickoff: datetime) -> Check:

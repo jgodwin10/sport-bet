@@ -42,14 +42,14 @@ function NoSlip({ slip }: { slip: TwoOddsSlip }) {
   if (!slip.built) {
     return <Card><Empty title="Today's slip isn't ready" icon="clock">The analysis runs with each prediction update. Check back soon.</Empty></Card>;
   }
-  const waitingForAi = slip.rejected.some((r) => r.reasons.some((x) => x.startsWith("waiting for an analysis")));
+  const waitingForAi = slip.rejected.some((r) => r.reasons.length === 1 && r.reasons[0].startsWith("waiting for an analysis"));
   return (
     <Card>
       <Empty title="No slip today" icon="ban">
         {slip.analysed === 0
           ? "None of today's remaining games has a priced favourite strong enough to analyse."
           : waitingForAi
-            ? `${slip.analysed} ${slip.analysed === 1 ? "game is" : "games are"} waiting for the news check. The slip will appear here if they pass.`
+            ? `Some of today's ${slip.analysed} analysed ${slip.analysed === 1 ? "game is" : "games are"} waiting for the news check. The slip will appear here if enough pass.`
             : `We analysed ${slip.analysed} ${slip.analysed === 1 ? "game" : "games"} and could not make about ${odds(slip.min_combined_odds)} odds from the ones that passed. Passing on a day is part of the method.`}
       </Empty>
       {slip.changes.length > 0 && <p className="px-4 pb-4 text-center text-sm text-ink-3">{slip.changes[slip.changes.length - 1].reason}</p>}
@@ -94,7 +94,7 @@ function SlipView({ slip }: { slip: TwoOddsSlip }) {
 }
 
 const STATUS: Record<string, { label: string; tone?: "pos" | "neg" }> = {
-  pending: { label: "In play or to come" }, won: { label: "Won", tone: "pos" }, lost: { label: "Lost", tone: "neg" },
+  pending: { label: "Pending" }, won: { label: "Won", tone: "pos" }, lost: { label: "Lost", tone: "neg" },
   void: { label: "Void" }, none: { label: "—" },
 };
 
@@ -157,7 +157,7 @@ function Rejected({ slip }: { slip: TwoOddsSlip }) {
                 {selectionLabel("1x2", r.selection, r.home, r.away)} <span className="num font-normal text-ink-3">@ {odds(r.odds)} · {pct(r.probability, 0)}</span>
               </Link>
               <div className="truncate text-xs text-ink-4">{r.match}</div>
-              <p className="mt-1 text-xs text-ink-3">{r.reasons[0]}</p>
+              <p className="mt-1 text-xs text-ink-3">{r.reasons.join(" · ")}</p>
             </li>
           ))}
         </ul>

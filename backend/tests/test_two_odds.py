@@ -94,6 +94,11 @@ def test_slip_settlement_treats_a_void_leg_as_odds_of_one():
     assert two_odds.settled_odds([(1.5, "win"), (1.4, "win")]) == pytest.approx(2.1)
 
 
+def test_table_positions_read_as_ordinals():
+    assert [two_odds._ordinal(n) for n in (1, 2, 3, 4, 11, 12, 13, 21, 22, 23)] == [
+        "1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd"]
+
+
 def test_backtest_summary_reports_hit_rate_and_losing_run():
     rows = []
     for day, hit in enumerate((True, False, False, True)):
