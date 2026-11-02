@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     def ai_provider_list(self) -> list[str]:
         return [n.lower() for n in _names(self.ai_providers)]
 
+    # The calendar day a daily 2 odds slip covers is taken in this time zone
+    two_odds_timezone: str = "UTC"
+
     # Competitions to track, by internal code (see app/ingestion/competitions.py)
     competitions: list[str] = [
         "ENG-1", "ENG-2", "ENG-3", "ENG-4", "ENG-5", "SCO-1", "SCO-2", "SCO-3", "SCO-4", "GER-1", "GER-2",

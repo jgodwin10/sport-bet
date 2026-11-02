@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import { Competition, Fixture, pageOf, SelectionRow, Standings, TopPickRecord, TopPicks } from "./types";
+import { Competition, Fixture, pageOf, SelectionRow, Standings, TopPickRecord, TopPicks, TwoOddsRecord, TwoOddsSlip } from "./types";
 import type { AiAnalysis, AiAnalysisState, Analysis, Page } from "./types";
 import { z } from "zod";
 
@@ -64,6 +64,16 @@ export const useTopPickRecord = () =>
   useQuery({
     queryKey: ["top-picks-record"],
     queryFn: () => api<TopPickRecord>("/predictions/top/record", { schema: TopPickRecord }),
+    staleTime: 300_000,
+  });
+
+export const useTwoOdds = () =>
+  useQuery({ queryKey: ["two-odds"], queryFn: () => api<TwoOddsSlip>("/predictions/two-odds", { schema: TwoOddsSlip }), ...LIVE });
+
+export const useTwoOddsRecord = () =>
+  useQuery({
+    queryKey: ["two-odds-record"],
+    queryFn: () => api<TwoOddsRecord>("/predictions/two-odds/record", { schema: TwoOddsRecord }),
     staleTime: 300_000,
   });
 

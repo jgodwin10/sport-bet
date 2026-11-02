@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,10 +8,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.v1.serializers import prediction_detail, team_ref
-from app.db.models import Competition, Fixture, Prediction, Selection, SettledSelection, Team
+from app.core.config import get_settings
+from app.db.models import Competition, DailySlip, Fixture, Prediction, Selection, SettledSelection, Team
 from app.db.session import get_db
 from app.providers.ai import get_ai
-from app.schemas.api import Page, SelectionRow, TopPickRecord, TopPickResult, TopPickRow, TopPicks
+from app.schemas.api import (
+    Page, SelectionRow, TopPickRecord, TopPickResult, TopPickRow, TopPicks, TwoOddsLeg, TwoOddsRecord, TwoOddsResult,
+    TwoOddsSlip,
+)
+from app.services import two_odds
 from app.services.top_picks import latest_prediction_ids, top_picks, track_record
 
 router = APIRouter(prefix="/predictions", tags=["predictions"])
@@ -135,6 +140,52 @@ def top_picks_record(db: Session = Depends(get_db), limit: int = Query(100, ge=1
             running_profit=h["running_profit"],
         ))
     return TopPickRecord(summary=rec["summary"], dropped=rec["dropped"], history=history)
+
+
+def two_odds_leg(leg: dict, now: datetime) -> TwoOddsLeg:
+    f = leg["fixture"]
+    return TwoOddsLeg(
+        **selection_row(leg["selection"], leg["prediction"], f, leg["competition"], leg["home"], leg["away"],
+                        leg["settled"], now),
+        checks=leg["checks"],
+        score={"home": f.result.home_goals, "away": f.result.away_goals} if f.result else None,
+    )
+
+
+@router.get("/two-odds", response_model=TwoOddsSlip)
+def daily_two_odds(db: Session = Depends(get_db), on: date | None = Query(default=None, alias="date")) -> TwoOddsSlip:
+    now = datetime.now(timezone.utc)
+    day = on or two_odds.slip_day(now, get_settings().two_odds_timezone)
+    slip = db.get(DailySlip, day)
+    legs = two_odds.load_legs(db, slip) if slip else []
+    outcomes = [leg["outcome"] for leg in legs]
+    status = two_odds.slip_status(outcomes)
+    rules = two_odds.RULES
+    return TwoOddsSlip(
+        date=day, status=status, built=slip is not None,
+        locked=any(leg["fixture"].kickoff_utc <= now for leg in legs),
+        legs=[two_odds_leg(leg, now) for leg in legs],
+        combined_odds=slip.combined_odds if slip else None,
+        combined_probability=slip.combined_probability if slip else None,
+        paid_odds=two_odds.settled_odds([(leg["selection"].decimal_odds, leg["outcome"]) for leg in legs])
+        if status in ("won", "void") else None,
+        analysed=slip.analysed if slip else 0, spare=slip.spare if slip else 0,
+        rejected=slip.rejected if slip else [], changes=slip.changes if slip else [],
+        updated_at=slip.updated_at if slip else None, ai_configured=get_ai().configured,
+        min_combined_odds=rules.min_combined_odds, max_combined_odds=rules.max_combined_odds,
+        min_leg_probability=rules.min_leg_probability,
+    )
+
+
+@router.get("/two-odds/record", response_model=TwoOddsRecord)
+def two_odds_record(db: Session = Depends(get_db), limit: int = Query(60, ge=1, le=365)) -> TwoOddsRecord:
+    rec = two_odds.track_record(db, limit=limit)
+    now = datetime.now(timezone.utc)
+    return TwoOddsRecord(summary=rec["summary"], backtest=rec["backtest"], history=[
+        TwoOddsResult(date=h["slip"].slip_date, status=h["status"], combined_odds=h["slip"].combined_odds,
+                      combined_probability=h["slip"].combined_probability, profit=h["profit"],
+                      running_profit=round(h["running_profit"], 4), legs=[two_odds_leg(leg, now) for leg in h["legs"]])
+        for h in rec["history"]])
 
 
 @router.get("/{prediction_id}")

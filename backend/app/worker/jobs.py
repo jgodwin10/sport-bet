@@ -26,6 +26,7 @@ from app.services.backtests import execute_backtest
 from app.services.prediction import PredictionService
 from app.services.settlement import settle_finished
 from app.services.top_picks import record_top_picks
+from app.services.two_odds import record_two_odds
 
 log = logging.getLogger(__name__)
 
@@ -130,6 +131,16 @@ def refresh_team_news() -> dict:
     return out
 
 
+def _record_slip(db) -> dict | str:
+    s = get_settings()
+    try:
+        return record_two_odds(db, datetime.now(timezone.utc), s.two_odds_timezone, AiAnalysisService(db, s).configured)
+    except Exception:  # noqa: BLE001 - the slip must not fail the jobs that feed it
+        db.rollback()
+        log.exception("recording the daily 2 odds slip failed")
+        return "failed"
+
+
 def run_predictions(trigger: str = "scheduled", fixture_ids: list[int] | None = None) -> dict:
     with session_factory()() as db:
         out = PredictionService(db, get_settings()).predict_upcoming(trigger, fixture_ids=fixture_ids)
@@ -139,7 +150,13 @@ def run_predictions(trigger: str = "scheduled", fixture_ids: list[int] | None = 
             db.rollback()
             log.exception("recording the top picks failed")
             out["top_picks"] = "failed"
+        out["two_odds"] = _record_slip(db)
         return out
+
+
+def record_daily_slip() -> dict | str:
+    with session_factory()() as db:
+        return _record_slip(db)
 
 
 def ai_analysis(fixture_ids: list[int] | None = None) -> dict:
@@ -147,7 +164,8 @@ def ai_analysis(fixture_ids: list[int] | None = None) -> dict:
     with session_factory()() as db:
         svc = AiAnalysisService(db, get_settings())
         if not fixture_ids:
-            return svc.analyse_upcoming()
+            # New news can add or remove a leg, so the slip is reassessed straight after reading it
+            return {**svc.analyse_upcoming(), "two_odds": _record_slip(db)}
         out: dict[str, object] = {}
         for fid in fixture_ids:
             f = db.get(Fixture, fid)

@@ -138,6 +138,34 @@ export const TopPickRecord = z.object({
 });
 export type TopPickRecord = z.infer<typeof TopPickRecord>;
 
+const TwoOddsCheck = z.object({ key: z.string(), label: z.string(), status: z.enum(["pass", "note", "fail", "unchecked"]), detail: z.string() });
+export type TwoOddsCheck = z.infer<typeof TwoOddsCheck>;
+const TwoOddsLeg = SelectionRow.extend({
+  checks: z.array(TwoOddsCheck), score: z.object({ home: z.number(), away: z.number() }).nullable(),
+});
+export type TwoOddsLeg = z.infer<typeof TwoOddsLeg>;
+export const TwoOddsSlip = z.object({
+  date: z.string(), status: z.enum(["none", "pending", "won", "lost", "void"]), built: z.boolean(), locked: z.boolean(),
+  legs: z.array(TwoOddsLeg), combined_odds: z.number().nullable(), combined_probability: z.number().nullable(),
+  paid_odds: z.number().nullable(), analysed: z.number(), spare: z.number(),
+  rejected: z.array(z.object({
+    fixture_id: z.number(), match: z.string(), home: z.string(), away: z.string(), selection: z.string(),
+    probability: z.number(), odds: z.number(), reasons: z.array(z.string()),
+  })),
+  changes: z.array(z.object({ at: z.string(), reason: z.string() })), updated_at: z.string().nullable(), ai_configured: z.boolean(),
+  min_combined_odds: z.number(), max_combined_odds: z.number(), min_leg_probability: z.number(),
+});
+export type TwoOddsSlip = z.infer<typeof TwoOddsSlip>;
+export const TwoOddsResult = z.object({
+  date: z.string(), status: z.enum(["pending", "won", "lost", "void"]), combined_odds: z.number(), combined_probability: z.number(),
+  profit: z.number().nullable(), running_profit: z.number(), legs: z.array(TwoOddsLeg),
+});
+export type TwoOddsResult = z.infer<typeof TwoOddsResult>;
+export const TwoOddsRecord = z.object({
+  summary: z.record(z.number().nullable()), backtest: z.record(z.any()).nullable(), history: z.array(TwoOddsResult),
+});
+export type TwoOddsRecord = z.infer<typeof TwoOddsRecord>;
+
 export const LoginForm = z.object({
   email: z.string().email("Enter a valid email"),
   password: z.string().min(8, "At least 8 characters"),

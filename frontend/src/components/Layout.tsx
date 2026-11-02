@@ -11,6 +11,7 @@ import { cx, Sheet, TeamLogo } from "./ui";
 const NAV: { to: string; label: string; icon: IconName }[] = [
   { to: "/", label: "Matches", icon: "dashboard" },
   { to: "/top", label: "Top picks", icon: "star" },
+  { to: "/two-odds", label: "2 odds", icon: "target" },
   { to: "/teams", label: "Teams", icon: "shield" },
   { to: "/performance", label: "Record", icon: "chart" },
   { to: "/settings", label: "Settings", icon: "sliders" },
@@ -178,7 +179,7 @@ function Shell() {
       </main>
 
       <nav aria-label="Main" className="lg:hidden fixed inset-x-3 bottom-[max(12px,env(safe-area-inset-bottom))] z-30">
-        <div className="card !rounded-full grid grid-cols-5 p-1.5 backdrop-blur-xl">
+        <div className="card !rounded-full grid grid-cols-6 p-1.5 backdrop-blur-xl">
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.to === "/"}
                      className={({ isActive }) => cx("flex flex-col items-center justify-center gap-0.5 h-14 rounded-full text-[10.5px] font-semibold transition-all",

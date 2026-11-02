@@ -196,6 +196,70 @@ class TopPicks(BaseModel):
     items: list[TopPickRow]
 
 
+class TwoOddsCheck(BaseModel):
+    key: str
+    label: str
+    status: Literal["pass", "note", "fail", "unchecked"]
+    detail: str
+
+
+class TwoOddsLeg(SelectionRow):
+    checks: list[TwoOddsCheck]
+    score: dict[str, int] | None
+
+
+class TwoOddsRejected(BaseModel):
+    fixture_id: int
+    match: str
+    home: str
+    away: str
+    selection: str
+    probability: float
+    odds: float
+    reasons: list[str]
+
+
+class TwoOddsChange(BaseModel):
+    at: datetime
+    reason: str
+
+
+class TwoOddsSlip(BaseModel):
+    date: date
+    status: Literal["none", "pending", "won", "lost", "void"]
+    built: bool  # False until the first analysis of the day has run
+    locked: bool  # the first match has kicked off, so the slip can no longer change
+    legs: list[TwoOddsLeg]
+    combined_odds: float | None
+    combined_probability: float | None
+    paid_odds: float | None  # after results; void legs count as odds of 1
+    analysed: int
+    spare: int
+    rejected: list[TwoOddsRejected]
+    changes: list[TwoOddsChange]
+    updated_at: datetime | None
+    ai_configured: bool
+    min_combined_odds: float
+    max_combined_odds: float
+    min_leg_probability: float
+
+
+class TwoOddsResult(BaseModel):
+    date: date
+    status: Literal["pending", "won", "lost", "void"]
+    combined_odds: float
+    combined_probability: float
+    profit: float | None
+    running_profit: float
+    legs: list[TwoOddsLeg]
+
+
+class TwoOddsRecord(BaseModel):
+    summary: dict[str, float | int | None]
+    backtest: dict[str, Any] | None
+    history: list[TwoOddsResult]
+
+
 # ---------------------------------------------------------------- backtest
 class BacktestRequest(BaseModel):
     competitions: list[str] = Field(min_length=1, max_length=20)

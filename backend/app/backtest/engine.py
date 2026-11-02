@@ -29,6 +29,7 @@ from app.engine.pipeline import (
     COMPONENTS_1X2, ModelSuite, SuiteConfig, combine_1x2, market_1x2, market_binary, outcome_index, rake_matrix,
     stat_disagreement,
 )
+from app.engine.slip import SlipLeg, SlipRules, build_slip, combined_probability, core_checks, leg_passes
 
 log = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ class BacktestParams:
     step_days: int = 7
     price_source: str = "best"  # best (best individual bookmaker) | avg (market average)
     rules: SelectionRules = field(default_factory=SelectionRules)
+    slip_rules: SlipRules = field(default_factory=SlipRules)
     min_oos_for_weights: int = 300
     suite: SuiteConfig = field(default_factory=lambda: SuiteConfig(compute_intervals=False))
 
@@ -198,6 +200,11 @@ def _predict_one(suite: ModelSuite, m: BacktestMatch, comp: str, weights: dict |
                 candidates.append((Candidate("totals_2.5", sel, p, price[0], price[1], validated=True), hit,
                                    _closing(m.close_totals, sel, price[1])))
 
+    if mkt is not None:
+        legs = _slip_legs(m, r, outcome, final, mkt, probs, rel.score, disagreement, min(out.sample_sizes.values()), params)
+        if legs:
+            row["slip_legs"] = legs
+
     # At most one bet per market per match: the qualifying selection with highest EV
     chosen: dict[str, tuple] = {}
     for cand, hit, closing in candidates:
@@ -213,6 +220,58 @@ def _predict_one(suite: ModelSuite, m: BacktestMatch, comp: str, weights: dict |
             "closing_odds": closing, "clv": (cand.odds / closing - 1) if closing else None,
         })
     return row
+
+
+def _slip_legs(m: BacktestMatch, r: MatchRecord, outcome: int, final: np.ndarray, mkt: np.ndarray, probs: dict,
+               reliability: float, disagreement: float | None, sample: int, params: BacktestParams) -> list[SlipLeg]:
+    """Legs that pass the daily 2 odds checks. Context (form, news, ...) is not replayed."""
+    legs = []
+    for idx, sel in ((0, "home"), (2, "away")):
+        price = _price(m.pre_1x2, sel, params.price_source)
+        if not price:
+            continue
+        checks = core_checks(sel, float(final[idx]), float(mkt[idx]), price[0], reliability, disagreement, sample, 0.0,
+                             probs, params.slip_rules)
+        if leg_passes(checks, params.slip_rules):
+            average = m.pre_1x2.get("avg", {}).get(sel, price[0])
+            legs.append(SlipLeg(r.key, float(final[idx]), price[0], {"hit": idx == outcome, "average_odds": average}))
+    return legs
+
+
+def slip_summary(rows: list[dict], rules: SlipRules) -> dict:
+    """One slip per calendar day with matches, staked at 1 unit."""
+    by_day: dict[str, list[SlipLeg]] = defaultdict(list)
+    days = set()
+    for r in rows:
+        day = r["date"][:10]
+        days.add(day)
+        by_day[day].extend(r.get("slip_legs", []))
+    slips = [(day, slip) for day in sorted(by_day) if (slip := build_slip(by_day[day], rules))]
+    if not slips:
+        return {"slips": 0, "days_with_matches": len(days)}
+    won, profits, at_average, odds_used, expected, run, worst = 0, [], [], [], [], 0, 0
+    for _, slip in slips:
+        hit = all(leg.payload["hit"] for leg in slip)
+        won += hit
+        price = math.prod(leg.odds for leg in slip)
+        average = math.prod(leg.payload["average_odds"] for leg in slip)
+        profits.append(price - 1 if hit else -1.0)
+        at_average.append(average - 1 if hit else -1.0)
+        odds_used.append(price)
+        expected.append(combined_probability(slip))
+        run = 0 if hit else run + 1
+        worst = max(worst, run)
+    n = len(slips)
+    rate = won / n
+    margin = 1.645 * math.sqrt(rate * (1 - rate) / n)
+    return {
+        "slips": n, "days_with_matches": len(days), "won": won, "hit_rate": rate,
+        "hit_rate_interval_90": [max(0.0, rate - margin), min(1.0, rate + margin)],
+        "expected_hit_rate": float(np.mean(expected)), "avg_odds": float(np.mean(odds_used)),
+        "avg_legs": float(np.mean([len(s) for _, s in slips])), "roi": sum(profits) / n,
+        "roi_interval_90": bootstrap_roi_interval(profits), "roi_at_average_odds": sum(at_average) / n,
+        "longest_losing_run": worst, "max_drawdown": round(max_drawdown(profits), 3),
+    }
 
 
 def _totals_weight(oos_over: list[tuple[float, float, int]]) -> float:
@@ -338,6 +397,7 @@ def summarise(rows, bets, oos, oos_outcomes, oos_over, weights_history, params: 
         curve.append({"date": b["date"][:10], "cumulative_profit": round(cum, 3)})
     result["betting"]["equity_curve"] = curve
     result["bets"] = sorted(bets, key=lambda b: b["date"])
+    result["two_odds"] = slip_summary(rows, params.slip_rules)
     by_comp_acc = defaultdict(list)
     for i, r in enumerate(rows):
         by_comp_acc[r["competition"]].append(i)

@@ -5,6 +5,7 @@
     python -m app.cli ingest-upcoming
     python -m app.cli ingest-logos
     python -m app.cli predict
+    python -m app.cli two-odds
     python -m app.cli ai-analysis [--fixtures 123 456]
     python -m app.cli backtest --competitions ENG-1 --from 2023-08-01 --to 2026-06-30 --deploy
     python -m app.cli backtest --competitions leagues --from 2024-07-01 --to 2026-10-29 --deploy
@@ -46,6 +47,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh-odds")
     sub.add_parser("team-news")
     sub.add_parser("predict")
+    sub.add_parser("two-odds")
     ai = sub.add_parser("ai-analysis")
     ai.add_argument("--fixtures", nargs="*", type=int)
     sub.add_parser("settle")
@@ -102,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
                               "one_x_two": m["one_x_two"]["comparison_common_subset"],
                               "calibration_ece": m["calibration_ece"], "learned_weights": m["learned_weights"],
                               "validated_markets": m["validated_markets"],
-                              "betting": m["betting"]["overall"],
+                              "betting": m["betting"]["overall"], "two_odds": m.get("two_odds"),
                               "model_version": {"id": version.id, "version": version.version, "status": version.status}
                               if version else None}, indent=2, default=str))
             if args.deploy and (version is None or version.status != "deployed"):
@@ -113,6 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     fn = {"ingest-history": lambda: jobs.ingest_history(args.competitions, args.seasons, force=True),
           "ingest-logos": lambda: jobs.ingest_logos(args.force), "ingest-upcoming": jobs.ingest_upcoming, "refresh-odds": jobs.refresh_odds,
           "team-news": jobs.refresh_team_news, "predict": lambda: jobs.run_predictions("manual"),
+          "two-odds": jobs.record_daily_slip,
           "ai-analysis": lambda: jobs.ai_analysis(args.fixtures),
           "settle": jobs.settle, "update-cycle": jobs.update_cycle}[args.cmd]
     print(json.dumps(fn(), indent=2, default=str))

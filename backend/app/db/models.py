@@ -476,6 +476,27 @@ class TopPickEntry(Base):
     selection: Mapped[Selection] = relationship()
 
 
+class DailySlip(Base):
+    """One day's 2 odds accumulator and the analysis behind it.
+
+    Refreshed until the first leg kicks off, then frozen. `legs` holds the selection and the
+    checks for each leg: [{selection_id, fixture_id, checks}]. A day with no qualifying
+    combination keeps a row with no legs, so its record shows the day was passed on.
+    """
+
+    __tablename__ = "daily_slips"
+    slip_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    legs: Mapped[list[Any]] = mapped_column(default=list)
+    combined_odds: Mapped[float | None] = mapped_column(Float)
+    combined_probability: Mapped[float | None] = mapped_column(Float)
+    analysed: Mapped[int] = mapped_column(Integer, default=0)  # favourites given the full analysis
+    spare: Mapped[int] = mapped_column(Integer, default=0)  # passed every check but not needed
+    rejected: Mapped[list[Any]] = mapped_column(default=list)  # [{match, selection, probability, reasons, ...}]
+    changes: Mapped[list[Any]] = mapped_column(default=list)  # [{at, reason}] when published legs were replaced
+    first_built_at: Mapped[datetime] = mapped_column()
+    updated_at: Mapped[datetime] = mapped_column()
+
+
 # --------------------------------------------------------------- backtests
 class Backtest(Base):
     __tablename__ = "backtests"

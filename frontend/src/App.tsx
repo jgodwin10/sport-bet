@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 const MatchAnalysis = lazy(() => import("./pages/MatchAnalysis"));
 const Predictions = lazy(() => import("./pages/Predictions"));
 const TopPicks = lazy(() => import("./pages/TopPicks"));
+const TwoOdds = lazy(() => import("./pages/TwoOdds"));
 const Teams = lazy(() => import("./pages/Teams"));
 const Performance = lazy(() => import("./pages/Performance"));
 const Settings = lazy(() => import("./pages/Settings"));
@@ -22,6 +23,7 @@ export default function App() {
             <Route index element={<Dashboard />} />
             <Route path="match/:id" element={<MatchAnalysis />} />
             <Route path="top" element={<TopPicks />} />
+            <Route path="two-odds" element={<TwoOdds />} />
             <Route path="predictions" element={<Predictions />} />
             <Route path="teams" element={<Teams />} />
             <Route path="performance" element={<Performance />} />
